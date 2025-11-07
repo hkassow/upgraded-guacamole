@@ -15,6 +15,7 @@ docker run -p 8443:8443 my-go-api
 
 
 # view/create/edit recipes
+# filter recipes by ingredients or by letters/words
 # create grocery list from recipes 
 # organize ingredients by tags (tags self created like upstairs and downstairs for our use case)
 

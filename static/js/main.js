@@ -1,3 +1,18 @@
+// contains javascript code for main application
+// util
+// recipe
+// dark mode
+// modal
+//
+
+// -------- on page load --------
+window.addEventListener('DOMContentLoaded', () => {
+    fetchRecipes();
+
+    getSavedColorTheme();
+});
+
+// -------- util code --------
 async function makeRequest() {
     const btn = document.getElementById('requestBtn');
     const responseDiv = document.getElementById('response');
@@ -23,6 +38,7 @@ async function makeRequest() {
     }
 }
 
+// -------- recipe code --------
 async function fetchRecipes() {
     const btn = document.getElementById('recipesBtn');
     const responseDiv = document.getElementById('recipesResponse');
@@ -66,6 +82,39 @@ async function fetchRecipes() {
         btn.disabled = false;
     }
 }
+
+async function submitRecipeForm(event) {
+    event.preventDefault();
+    const recipeForm = document.getElementById('recipeForm');
+
+    const newRecipe = {
+        name: recipeForm.recipeName.value.trim(),
+    };
+
+    try {
+        console.log('Submitting new recipe:', newRecipe);
+        // Example API call — update this for your backend
+        const response = await fetch('/recipes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newRecipe),
+        });
+
+        if (!response.ok) throw new Error('Failed to save recipe');
+
+        closeModal('recipeModal');
+        recipeForm.reset();
+
+        // Reload recipes
+        fetchRecipes();
+
+    } catch (err) {
+        console.error('Error saving recipe:', err);
+    }
+}
+
+
+// -------- dark mode code --------
 function toggleDarkMode() {
     document.body.classList.toggle('dark');
     const isDark = document.body.classList.contains('dark');
@@ -94,12 +143,33 @@ function getSavedColorTheme() {
     }
     requestAnimationFrame(() => {
         document.body.classList.remove('notransition');
+	document.body.classList.add('page-loaded');
     });
 }
-// Automatically fetch recipes when the page loads
-window.addEventListener('DOMContentLoaded', () => {
-    fetchRecipes();
-    
-    getSavedColorTheme();
-});
 
+// -------- modal code --------
+function openModal(modalElement) {
+    const modal = typeof modalElement === 'string'
+        ? document.getElementById(modalElement)
+        : modalElement;
+
+    modal.style.display = 'flex';
+    modal.classList.add('visible');
+}
+
+function closeModal(modalElement) {
+    const modal = typeof modalElement === 'string'
+        ? document.getElementById(modalElement)
+        : modalElement;
+
+    modal.classList.remove('visible');
+    setTimeout(() => {
+        modal.style.display = 'none';
+    }, 200);
+}
+
+function handleModalBackgroundClick(event, modalElement) {
+    if (event.target === modalElement) {
+        closeModal(modalElement);
+    }
+}

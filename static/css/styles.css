@@ -26,6 +26,27 @@ body.dark {
     --color-box-border: transparent;
 }
 
+.recipe-card,
+.container,
+button,
+body {
+    transition: background 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
+}
+
+body.notransition *,
+body.notransition {
+    transition: none !important;
+}
+
+body {
+    opacity: 0;
+    transition: opacity 0.4s ease, background 0.3s ease, color 0.3s ease;
+}
+
+body.page-loaded {
+    opacity: 1;
+}
+
 body {
     font-family: Arial, sans-serif;
     max-width: 600px;
@@ -95,6 +116,13 @@ button:disabled {
     border-left-color: var(--color-accent-pink);
     background: #fff5f7;
     color: var(--color-error-text);
+
+}
+.recipe-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between; 
+    margin-bottom: 1rem;
 }
 
 .recipe-card {
@@ -122,14 +150,80 @@ button:disabled {
     font-size: 14px;
 }
 
-.recipe-card,
-.container,
-button,
-body {
-    transition: background 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
+.modal {
+    display: none; /* Hidden by default */
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(4px);
+    justify-content: center;
+    align-items: center;
 }
 
-body.notransition *,
-body.notransition {
-    transition: none !important;
+.modal-content {
+    background-color: var(--color-container-bg);
+    margin: auto;
+    padding: 20px 30px;
+    border-radius: 10px;
+    width: 90%;
+    max-width: 400px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    animation: modalFadeIn 0.25s ease;
+}
+
+.modal-content h2 {
+    margin-top: 0;
+}
+
+.modal-content label {
+    display: block;
+    margin-top: 10px;
+    font-weight: bold;
+}
+
+.modal-content input,
+.modal-content textarea {
+    width: 100%;
+    padding: 10px;
+    margin-top: 6px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    background: var(--color-accent-yellow);
+    color: var(--color-text-dark);
+}
+
+.modal-content button[type="submit"] {
+    margin-top: 15px;
+    background: var(--color-accent-mint);
+    border: none;
+    padding: 10px 18px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.modal-content button[type="submit"]:hover {
+    background: var(--color-accent-yellow);
+}
+
+.close {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.close:hover {
+    color: #555;
+}
+
+/* Animation for modal popup */
+@keyframes modalFadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
 }

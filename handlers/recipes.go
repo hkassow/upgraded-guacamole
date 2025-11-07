@@ -3,45 +3,57 @@ package handlers
 import (
         "encoding/json"
         "net/http"
+	"log"
 )
 
 type Recipe struct {
     Name     string `json:"name"`
-    //Category string `json:"category"`
+}
+
+var recipes = []Recipe{
+    {"Spaghetti Carbonara"},
+    {"Beef Stroganoff"},
+    {"Chicken Curry"},
+}
+
+func respondJSON(w http.ResponseWriter, data interface{}) {
+	json.NewEncoder(w).Encode(data)
 }
 
 func RecipesHandler(w http.ResponseWriter, r *http.Request) {
-    recipes := []Recipe{
-        {"Spaghetti Carbonara"},
-        {"Beef Stroganoff"},
-        {"Chicken Curry"},
-    }
+	w.Header().Set("Content-Type", "application/json")
 
-    w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(recipes)
+	switch r.Method {
+	case http.MethodGet:
+		handleGetRecipes(w, r)
+	case http.MethodPost:
+		handlePostRecipe(w, r)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
 }
 
-/*type Response struct {
-        Message string `json:"message"`
-}
-func Hello(name string) string {
-    message := fmt.Sprintf("Hello hunter, %v. Welcome!", name)
-    return message
+func handleGetRecipes(w http.ResponseWriter, r *http.Request) {
+    respondJSON(w, recipes)
 }
 
-func HelloHandler(w http.ResponseWriter, r *http.Request) {
-        w.Header().Set("Content-Type", "application/json")
+func handlePostRecipe(w http.ResponseWriter, r *http.Request) {
+	log.Println("Hello backend")
+	var newRecipe Recipe
+	if err := json.NewDecoder(r.Body).Decode(&newRecipe); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
 
-        name := strings.TrimPrefix(r.URL.Path, "/hello/")
-        if name == "" {
-                name = "World"
-        }
+	if newRecipe.Name == "" {
+		http.Error(w, "Missing fields", http.StatusBadRequest)
+		return
+	}
 
-        response := Response{
-                Message: Hello(name),
-        }
+	recipes = append(recipes, newRecipe)
 
-        json.NewEncoder(w).Encode(response)
-
-        log.Println("Hello backend")
-}*/
+	w.WriteHeader(http.StatusCreated)
+	respondJSON(w, map[string]string{
+		"message": "Recipe added successfully",
+	})
+}

@@ -19,10 +19,30 @@
     </div>
 
     <div class="container">
-        <h2>Recipe List</h2>
+	<div class="recipe-header">
+            <h2>Recipe List</h2>
+	    <button onclick="openModal('recipeModal')">＋ Add Recipe</button>
+	</div>
         <p>Click the button to fetch recipes from <code>/recipes</code></p>
         <button id="recipesBtn" onclick="fetchRecipes()">Get Recipes</button>
         <div id="recipesResponse"></div>
+
+	<!-- Recipe Add Modal -->
+	<div id="recipeModal" class="modal" onclick="handleModalBackgroundClick(event, this)">
+	  <div class="modal-content">
+	    <span class="close" onclick="closeModal(this.closest('.modal'))">&times;</span>
+	    <h2>Add New Recipe</h2>
+	    <form id="recipeForm" onsubmit="submitRecipeForm(event)">
+	      <label for="recipeName">Name:</label>
+	      <input type="text" id="recipeName" name="name" required />
+	
+	      <label for="recipeDescription">Description:</label>
+	      <textarea id="recipeDescription" name="description" required></textarea>
+	
+	      <button type="submit">Save Recipe</button>
+	    </form>
+	  </div>
+	</div>
     </div>
 
     <!-- External JS file -->
