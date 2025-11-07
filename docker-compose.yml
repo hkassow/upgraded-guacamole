@@ -1,0 +1,13 @@
+version: '3.8'
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8443:8443"
+    volumes:
+      - .:/app
+      - /app/tmp  # Exclude tmp directory from sync
+    environment:
+      - CGO_ENABLED=0

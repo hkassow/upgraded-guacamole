@@ -12,7 +12,7 @@ type Response struct {
 	Message string `json:"message"`
 }
 func Hello(name string) string {
-    message := fmt.Sprintf("Hello, %v. Welcome!", name)
+    message := fmt.Sprintf("Hello hunter, %v. Welcome!", name)
     return message
 }
 
