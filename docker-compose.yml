@@ -11,3 +11,23 @@ services:
       - /app/tmp  # Exclude tmp directory from sync
     environment:
       - CGO_ENABLED=0
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/guac?sslmode=disable
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  db:
+    image: postgres:15
+    container_name: guac
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: guac
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

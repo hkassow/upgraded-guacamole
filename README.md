@@ -23,7 +23,6 @@ docker run -p 8443:8443 my-go-api
 
 # need database (mysql running in container?)
 # need tables (recipe, ingredient w/ tag metadata?)
-# need frontend (vite?) 
 # go backend
 
 
@@ -38,8 +37,19 @@ docker run -p 8443:8443 my-go-api
 
 
 
-# steps
-[x] 1. enable hot reload
-2. setup views for main recipe page
-3. setup views for creating recipe page
+
+# database additions
+~ way to tag ingredients 
+
+category table
+id, name, description(?)
+    
+    (dinner, lunch, breakfast, snack, dessert, soup?)
+
+recipe_category table
+id, recipe_id, category_id
+
+comment table (?)
+id, recipe_id, text
+
 

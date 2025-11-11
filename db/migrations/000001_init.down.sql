@@ -1,0 +1,5 @@
+DROP TABLE IF EXISTS recipe_ingredient CASCADE;
+DROP TABLE IF EXISTS ingredients CASCADE;
+DROP TABLE IF EXISTS recipes CASCADE;
+DROP FUNCTION IF EXISTS update_updated_at_column;
+
