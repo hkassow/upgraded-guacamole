@@ -9,9 +9,12 @@ services:
     volumes:
       - .:/app
       - /app/tmp  # Exclude tmp directory from sync
+    secrets:
+      - openai_api_key
     environment:
       - CGO_ENABLED=0
       - DATABASE_URL=postgres://postgres:postgres@db:5432/guac?sslmode=disable
+      - OPENAI_API_KEY_FILE=/run/secrets/openai_api_key
     depends_on:
       - db
     restart: unless-stopped
@@ -31,3 +34,7 @@ services:
 
 volumes:
   pgdata:
+
+secrets:
+  openai_api_key:
+    file: ./secrets/openai_api_key
