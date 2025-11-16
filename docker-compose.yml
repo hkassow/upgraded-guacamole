@@ -14,7 +14,7 @@ services:
     environment:
       - CGO_ENABLED=0
       - DATABASE_URL=postgres://postgres:postgres@db:5432/guac?sslmode=disable
-      - OPENAI_API_KEY_FILE=/run/secrets/openai_api_key
+      - INTERNAL_API_KEY_FILE=/run/secrets/internal_api_key
     depends_on:
       - db
     restart: unless-stopped
@@ -36,5 +36,5 @@ volumes:
   pgdata:
 
 secrets:
-  openai_api_key:
-    file: ./secrets/openai_api_key
+  internal_api_key:
+    file: ./secrets/internal_api_key

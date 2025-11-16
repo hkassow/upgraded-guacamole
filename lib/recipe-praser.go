@@ -4,21 +4,16 @@ import (
 	"context"
 	"fmt"
 	"log"
-
-	openai "github.com/sashabaranov/go-openai"
 )
 
 // ParseRecipe sends raw recipe text to ChatGPT and returns the response text.
 func ParseRecipe(recipeText string) (string, error) {
-	apiKey, err := LoadSecret("OPENAI_API_KEY")
+	apiKey, err := LoadSecret("INTERNAL_API_KEY")
 	if err != nil {
 	    log.Fatal(err)
 	}
 
-	client := openai.NewClient(apiKey)
-	ctx := context.Background()
-
-	// Prompt: Ask GPT to parse the recipe and output structured JSON
+	// Prompt: Ask model to parse the recipe and output structured JSON
 	prompt := fmt.Sprintf(`
 	    Parse the following recipe text and return a JSON with only these fields:
 	    1. steps: an array of strings describing each step
@@ -33,16 +28,9 @@ func ParseRecipe(recipeText string) (string, error) {
 	    Output strictly valid JSON, no extra text.
 	`, recipeText)
 
-	resp, err := client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
-	    Model: "gpt-4",
-	    Messages: []openai.ChatCompletionMessage{
-		{
-		    Role:    "user",
-		    Content: prompt,
-		},
-	    },
-	    Temperature: 0,
-	})
+	
+	log.Println("Hello recipe parser", recipeText)
+
 	if err != nil {
 	    return "", err
 	}
