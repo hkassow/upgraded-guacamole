@@ -6,34 +6,33 @@
 go run .
 
 # Run using docker
-docker build -t my-go-api .
+docker compose up --build
 
-docker run -p 8443:8443 my-go-api
-
+docker compose down
 
 ## project goals 
 
+1. add recipes
+    a. parse recipes
+    b. allow async recipe upload (dont wait for recipe to be parsed just complete and come back later)
+    
+2. create grocery list from recipes
+    a. add tags to ingredients
+    b. combine similar tags together
+    c. add lone ingredients
 
-# view/create/edit recipes
-# filter recipes by ingredients or by letters/words
-# create grocery list from recipes 
-# organize ingredients by tags (tags self created like upstairs and downstairs for our use case)
-
-## technical details
-
-# need database (mysql running in container?)
-# need tables (recipe, ingredient w/ tag metadata?)
-# go backend
+3. filter for recipes/ingredients 
 
 
 ## future implementations
-# grocery list export to google keeps?
-# host website on web behind some type of auth?
-# show seasonal recipes (list ingredients by season, get current in season stuff?)
-# photo upload
-# export recipes from sites? (paste link and then copy recipe?)
-# allow listing ingredients without tags
-# have ingredient lister that shows which need tags
+- send website link and parse that way
+- grocery list export to google keeps?
+- host website on web behind some type of auth?
+- show seasonal recipes (list ingredients by season, get current in season stuff?)
+- photo upload
+- export recipes from sites? (paste link and then copy recipe?)
+- allow listing ingredients without tags
+- have ingredient lister that shows which need tags
 
 
 
