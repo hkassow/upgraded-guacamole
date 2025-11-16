@@ -1,67 +1,45 @@
-package main
-
-import (
-	"bytes"
-	"encoding/json"
-	"io"
-	"log"
-	"net/http"
-)
-
-type PredictRequest struct {
-	Input string `json:"input"`
-}
-
-type OllamaRequest struct {
-	Model  string `json:"model"`
-	Prompt string `json:"prompt"`
-}
-
-type OllamaResponse struct {
-	Response string `json:"response"`
-}
-
-type PredictResponse struct {
-	Result string `json:"result"`
-}
-
 func predictHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Only POST allowed", http.StatusMethodNotAllowed)
-		return
-	}
+    // ---- API KEY CHECK ----
+    apiKey := r.Header.Get("X-API-Key")
+    if apiKey != InternalAPIKey {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
+    // ------------------------
 
-	var req PredictRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
+    if r.Method != http.MethodPost {
+        http.Error(w, "Only POST allowed", http.StatusMethodNotAllowed)
+        return
+    }
 
-	// Prepare request for Ollama
-	ollamaReq := OllamaRequest{
-		Model:  "llama3.2",
-		Prompt: req.Input,
-	}
+    var req PredictRequest
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        http.Error(w, err.Error(), http.StatusBadRequest)
+        return
+    }
 
-	ollamaJSON, _ := json.Marshal(ollamaReq)
+    ollamaReq := OllamaRequest{
+        Model:  "llama3.2",
+        Prompt: req.Input,
+    }
 
-	resp, err := http.Post(
-		"http://localhost:11434/api/generate",
-		"application/json",
-		bytes.NewBuffer(ollamaJSON),
-	)
-	if err != nil {
-		http.Error(w, "Failed to contact model: "+err.Error(), 500)
-		return
-	}
-	defer resp.Body.Close()
+    jsonReq, _ := json.Marshal(ollamaReq)
 
-	// Ollama streams responses — collect all of it
-	body, _ := io.ReadAll(resp.Body)
+    resp, err := http.Post(
+        "http://localhost:11434/api/generate",
+        "application/json",
+        bytes.NewBuffer(jsonReq),
+    )
+    if err != nil {
+        http.Error(w, "Failed to contact model: "+err.Error(), 500)
+        return
+    }
+    defer resp.Body.Close()
 
-	// Send raw output back to client
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(body)
+    body, _ := io.ReadAll(resp.Body)
+
+    w.Header().Set("Content-Type", "application/json")
+    w.Write(body)
 }
 
 func main() {
@@ -78,4 +56,3 @@ func main() {
 		log.Fatal(err)
 	}
 }
-
