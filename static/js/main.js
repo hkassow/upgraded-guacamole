@@ -46,7 +46,6 @@ async function fetchRecipes() {
     btn.disabled = true;
     responseDiv.className = 'loading';
     responseDiv.textContent = 'Loading recipes...';
-
     try {
         const response = await fetch('/recipes', {
             method: 'GET',
@@ -67,7 +66,7 @@ async function fetchRecipes() {
                 const card = document.createElement('div');
                 card.className = 'recipe-card';
                 card.innerHTML = `
-                    <h3>${r.name}</h3>
+                    <h3>${r.title}</h3>
                 `;
                 card.addEventListener('click', () => {
                     console.log('Clicked recipe:', r);
@@ -89,6 +88,7 @@ async function submitRecipeForm(event) {
 
     const newRecipe = {
         name: recipeForm.recipeName.value.trim(),
+	text: recipeForm.recipeDescription.value.trim()    
     };
 
     try {

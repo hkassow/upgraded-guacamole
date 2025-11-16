@@ -4,16 +4,24 @@ import (
         "encoding/json"
         "net/http"
 	"log"
+
+	"go-guacamole/lib"
 )
 
-type Recipe struct {
+type RawRecipe struct {
     Name     string `json:"name"`
+    Text     string `json:"text"`
+}
+
+type Recipe struct {
+    Title       string       `json:"title"`
+    Steps       []string     `json:"steps"`
 }
 
 var recipes = []Recipe{
-    {"Spaghetti Carbonara"},
-    {"Beef Stroganoff"},
-    {"Chicken Curry"},
+	{Title: "Spaghetti Carbonara", Steps: []string{"do something", "do nothing"}},
+	{Title: "Beef Stroganoff", Steps: []string{"do something", "do nothing"}},
+	{Title: "Chicken Curry", Steps: []string{"do something", "do nothing"}},
 }
 
 func respondJSON(w http.ResponseWriter, data interface{}) {
@@ -39,21 +47,34 @@ func handleGetRecipes(w http.ResponseWriter, r *http.Request) {
 
 func handlePostRecipe(w http.ResponseWriter, r *http.Request) {
 	log.Println("Hello backend")
-	var newRecipe Recipe
-	if err := json.NewDecoder(r.Body).Decode(&newRecipe); err != nil {
+	var rawRecipe RawRecipe
+	if err := json.NewDecoder(r.Body).Decode(&rawRecipe); err != nil {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
 
-	if newRecipe.Name == "" {
+	if rawRecipe.Name == "" || rawRecipe.Text == "" {
 		http.Error(w, "Missing fields", http.StatusBadRequest)
 		return
 	}
+	
+	parsed, err := lib.ParseRecipeCall(rawRecipe.Text)
+    	if err != nil {
+        	log.Println("Error parsing recipe:", err)
+        	http.Error(w, "Failed to parse recipe", http.StatusInternalServerError)
+        	return
+    	}
+	
+	newRecipe := Recipe{
+        	Title: rawRecipe.Name,
+        	Steps: parsed.Steps,
+    	}
 
 	recipes = append(recipes, newRecipe)
 
-	w.WriteHeader(http.StatusCreated)
-	respondJSON(w, map[string]string{
-		"message": "Recipe added successfully",
-	})
+    	// Respond
+    	w.WriteHeader(http.StatusCreated)
+    	respondJSON(w, map[string]string{
+        	"message": "Recipe added successfully",
+    	})
 }

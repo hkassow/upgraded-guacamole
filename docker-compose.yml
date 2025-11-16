@@ -10,11 +10,13 @@ services:
       - .:/app
       - /app/tmp  # Exclude tmp directory from sync
     secrets:
-      - openai_api_key
+      - internal_api_key
+      - gouda_ip
     environment:
       - CGO_ENABLED=0
       - DATABASE_URL=postgres://postgres:postgres@db:5432/guac?sslmode=disable
       - INTERNAL_API_KEY_FILE=/run/secrets/internal_api_key
+      - GOUDA_IP_FILE=/run/secrets/gouda_ip
     depends_on:
       - db
     restart: unless-stopped
@@ -38,3 +40,5 @@ volumes:
 secrets:
   internal_api_key:
     file: ./secrets/internal_api_key
+  gouda_ip:
+    file: ./secrets/gouda_ip

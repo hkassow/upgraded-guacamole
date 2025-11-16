@@ -1,4 +1,4 @@
-func predictHandler(w http.ResponseWriter, r *http.Request) {
+func parseHandler(w http.ResponseWriter, r *http.Request) {
     // ---- API KEY CHECK ----
     apiKey := r.Header.Get("X-API-Key")
     if apiKey != InternalAPIKey {
@@ -43,7 +43,7 @@ func predictHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	http.HandleFunc("/predict", predictHandler)
+	http.HandleFunc("/parse-recipe", parseHandler)
 
 	log.Println("Starting HTTPS server on port 443...")
 	err := http.ListenAndServeTLS(
