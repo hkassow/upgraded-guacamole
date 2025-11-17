@@ -68,9 +68,7 @@ async function fetchRecipes() {
                 card.innerHTML = `
                     <h3>${r.title}</h3>
                 `;
-                card.addEventListener('click', () => {
-                    console.log('Clicked recipe:', r);
-                });
+		createRecipeModal(card, r)
                 responseDiv.appendChild(card);
             });
         }
@@ -172,4 +170,76 @@ function handleModalBackgroundClick(event, modalElement) {
     if (event.target === modalElement) {
         closeModal(modalElement);
     }
+}
+
+
+function createRecipeModal(card, recipe) {
+    // Create the modal dynamically
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal(modal);
+    });
+
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 800px; width: 70%;>
+            <span class="close">&times;</span>
+            <h2>${recipe.title}</h2>
+            <h3>Ingredients</h3>
+            <ul id="ingredientsList"></ul>
+            <div id="stepsContainer"></div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // Close button
+    modal.querySelector('.close').addEventListener('click', () => closeModal(modal));
+
+    // Populate ingredients
+    const ingredientsList = modal.querySelector('#ingredientsList');
+    recipe.ingredients.forEach(ing => {
+        const li = document.createElement('li');
+        li.textContent = `${ing.amount} ${ing.name} ${ing.preparation_notes || ''}`.trim();
+        ingredientsList.appendChild(li);
+    });
+
+    // Populate steps
+    if (recipe.steps.main) {
+        const mainSection = document.createElement('div');
+        const mainTitle = document.createElement('h3');
+        mainTitle.textContent = 'Instructions';
+        mainSection.appendChild(mainTitle);
+    
+        const mainOl = document.createElement('ol');
+        recipe.steps.main.forEach(step => {
+            const li = document.createElement('li');
+            li.textContent = step;
+            mainOl.appendChild(li);
+        });
+        mainSection.appendChild(mainOl);
+        stepsContainer.appendChild(mainSection);
+    }
+    
+    // Add other subcomponents
+    Object.entries(recipe.steps).forEach(([component, steps]) => {
+        if (component === 'main') return;
+    
+        const section = document.createElement('div');
+        const title = document.createElement('h3');
+        title.textContent = component.charAt(0).toUpperCase() + component.slice(1);
+        section.appendChild(title);
+    
+        const ol = document.createElement('ol');
+        steps.forEach(step => {
+            const li = document.createElement('li');
+            li.textContent = step;
+            ol.appendChild(li);
+        });
+        section.appendChild(ol);
+        stepsContainer.appendChild(section);
+    });
+    card.addEventListener('click', () => {
+        modal.style.display = 'block';
+    });
 }

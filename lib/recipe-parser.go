@@ -5,25 +5,42 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
+	"strings"
 	"net/http"
 	"time"
 	"log"
 )
 
 type Ingredient struct {
-	Name   string `json:"name"`
-	Amount string `json:"amount"`
+    Name   string `json:"name"`
+    Amount string `json:"amount"`
+    PreparationNotes string `json:"prep_notes"`
 }
 
 type RecipeParsed struct {
-	Steps       []string     `json:"steps"`
-	Ingredients []Ingredient `json:"ingredients"`
+    Steps       map[string][]string `json:"steps"`
+    Ingredients []Ingredient `json:"ingredients"`
 }
 
-type ParseRequest struct {
-	Prompt string `json:"text"`
+type Request struct {
+    Prompt string `json:"prompt"`
 }
+
+type ModelResponse struct {
+    Result string `json:"result"`
+}
+
+func cleanupJSON(raw string) string {
+    raw = strings.TrimSpace(raw)
+
+    raw = strings.TrimPrefix(raw, "```json")
+    raw = strings.TrimPrefix(raw, "```")
+    raw = strings.TrimSuffix(raw, "```")
+
+    return strings.TrimSpace(raw)
+}
+
 func ParseRecipeCall(recipeText string) (*RecipeParsed, error) {
 	apiKey, err := LoadSecret("INTERNAL_API_KEY")
         if err != nil {
@@ -33,38 +50,17 @@ func ParseRecipeCall(recipeText string) (*RecipeParsed, error) {
 	if err != nil {
 	    log.Fatal(err)
 	}
-	log.Println("secrets", apiKey, gouda_ip)
 
-	prompt := fmt.Sprintf(`
-	    Return ONLY valid JSON.
-	    
-	    Parse the following recipe and output:
-	    {
-	      "steps": [...],
-	      "ingredients": [
-	         { "name": "string", "amount": "string" }
-	      ]
-	    }
-	    
-	    Rules:
-	    - Normalize ingredient names (remove brand adjectives)
-	    - Preserve preparation (e.g. "thinly sliced", "melted")
-	    - Steps must be short instructions
-	    
-	    Recipe:
-	    %s
-	`, recipeText)
-
-	body, _ := json.Marshal(ParseRequest{
-		Prompt: prompt,
+	body, _ := json.Marshal(Request{
+		Prompt: recipeText,
 	})
-
-	path := fmt.Sprintf("https://%v:443/parse-recipe", gouda_ip)
+	
+	path := fmt.Sprintf("https://%v:8556/parse-recipe", gouda_ip)
 	
 	// setup http client
 
 	client := &http.Client{
-		Timeout: 15 * time.Second,
+		Timeout: 240000 * time.Second,
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: true,
@@ -79,11 +75,9 @@ func ParseRecipeCall(recipeText string) (*RecipeParsed, error) {
 		return parsed, err
 	}
 	
-	return parsed, fmt.Errorf("test error to stop process")
-
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-API-Key", apiKey) // internal auth header
-
+	
 	resp, err := client.Do(req)
 
 	if err != nil {
@@ -92,14 +86,21 @@ func ParseRecipeCall(recipeText string) (*RecipeParsed, error) {
 
 	defer resp.Body.Close()
 
-	data, _ := ioutil.ReadAll(resp.Body)
 
-	log.Println("HELLO OLLAMA", data)
 
-	if err := json.Unmarshal(data, &parsed); err != nil {
-		return parsed, err
-	}
+	data, _ := io.ReadAll(resp.Body)
 
+	
+    	var wrapper ModelResponse
+    	if err := json.Unmarshal(data, &wrapper); err != nil {
+    	    return parsed, fmt.Errorf("failed to decode wrapper: %w", err)
+    	}
+
+    	clean := cleanupJSON(wrapper.Result)
+
+    	if err := json.Unmarshal([]byte(clean), &parsed); err != nil {
+    	    return parsed, fmt.Errorf("failed to parse recipe json: %w", err)
+    	}
 	return parsed, nil
 }
 

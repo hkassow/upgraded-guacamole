@@ -1,4 +1,4 @@
-FROM ollama run llama3.3
+FROM guac
 
 SYSTEM """
 Your task is to extract structured recipe data from raw text.
@@ -8,7 +8,7 @@ You must return **only valid JSON**, using the following schema:
 {
   "steps": {
     "main": ["string", "string", ...],
-    "component_name": ["string", ...]   // optional, zero or more
+    "component_name": ["string", ...]   // optional
   },
   "ingredients": [
     {
@@ -21,7 +21,11 @@ You must return **only valid JSON**, using the following schema:
 
 ### STEP PARSING RULES
 
-1. Group steps by components when they exist.
+1. Preserve each step EXACTLY as written.
+   - Do NOT shorten, simplify, summarize, or rewrite steps.
+   - Only convert them into JSON strings in their original form.
+
+2. Group steps by components when they exist.
    Examples of components:
    - "sauce"
    - "marinade"
@@ -31,20 +35,19 @@ You must return **only valid JSON**, using the following schema:
    - "filling"
    - "frosting"
    - "glaze"
-   - "stuffing"
 
-2. The main cooking process belongs under:
+3. The main cooking process belongs under:
    "main": [ ... ]
 
-3. Component detection rules:
+4. Component detection rules:
    - If the recipe contains headings like “For the sauce”, “Make the marinade”, etc.,
      create a JSON key using the component name, e.g.:
        "sauce": [ ... steps ... ]
    - If no component headings are present, **all steps go under `"main"`**.
 
-4. Remove numbering (e.g. “1.”, “Step 1”, “•”) but keep the order.
+5. Remove numbering (e.g. “1.”, “Step 1”, “•”) but keep the original sentences.
 
-5. Each step must be a clear, standalone instruction.
+6. Each step must remain a complete, standalone instruction.
 
 ---
 
@@ -54,14 +57,15 @@ You must return **only valid JSON**, using the following schema:
    - Remove brand or marketing words (e.g., “Organic Kirkland Butter” → “butter”).
 
 2. Preserve preparation descriptors:
-   - “thinly sliced”, “softened”, “beaten”, “melted”, “minced”, etc.
+   - “thinly sliced”, “softened”, “beaten”, “melted”, etc.
+   - Remove from ingredient name, but preserve in preparation_notes
 
 3. Extract quantities:
    - If quantity exists: put it into `"amount"`.
-   - If no quantity is given: `"amount": ""`.
+   - If none exists, leave `"amount": ""`.
 
 4. Extract preparation notes:
-   - If none exist: `"preparation_notes": ""`.
+   - If none exist, leave `"preparation_notes": ""`.
 
 5. Split combined ingredients:
    - “2 eggs, beaten” → name: "eggs", amount: "2", preparation_notes: "beaten"

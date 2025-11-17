@@ -13,19 +13,8 @@ type RawRecipe struct {
     Text     string `json:"text"`
 }
 
-type Recipe struct {
-    Title       string       `json:"title"`
-    Steps       []string     `json:"steps"`
-}
-
-var recipes = []Recipe{
-	{Title: "Spaghetti Carbonara", Steps: []string{"do something", "do nothing"}},
-	{Title: "Beef Stroganoff", Steps: []string{"do something", "do nothing"}},
-	{Title: "Chicken Curry", Steps: []string{"do something", "do nothing"}},
-}
-
 func respondJSON(w http.ResponseWriter, data interface{}) {
-	json.NewEncoder(w).Encode(data)
+    json.NewEncoder(w).Encode(data)
 }
 
 func RecipesHandler(w http.ResponseWriter, r *http.Request) {
@@ -42,11 +31,19 @@ func RecipesHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleGetRecipes(w http.ResponseWriter, r *http.Request) {
-    respondJSON(w, recipes)
+    ctx := r.Context()
+
+    recipes, err := lib.GetAllRecipes(ctx)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(recipes)
 }
 
 func handlePostRecipe(w http.ResponseWriter, r *http.Request) {
-	log.Println("Hello backend")
 	var rawRecipe RawRecipe
 	if err := json.NewDecoder(r.Body).Decode(&rawRecipe); err != nil {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
@@ -64,17 +61,14 @@ func handlePostRecipe(w http.ResponseWriter, r *http.Request) {
         	http.Error(w, "Failed to parse recipe", http.StatusInternalServerError)
         	return
     	}
-	
-	newRecipe := Recipe{
-        	Title: rawRecipe.Name,
-        	Steps: parsed.Steps,
-    	}
 
-	recipes = append(recipes, newRecipe)
+	if err := lib.SaveParsedRecipe(r.Context(), rawRecipe.Name, parsed); err != nil {
+		http.Error(w, "DB save failed: "+err.Error(), 500)
+		return
+	}
 
-    	// Respond
     	w.WriteHeader(http.StatusCreated)
-    	respondJSON(w, map[string]string{
+	json.NewEncoder(w).Encode(map[string]string{
         	"message": "Recipe added successfully",
     	})
 }
