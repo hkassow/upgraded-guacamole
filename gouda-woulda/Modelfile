@@ -98,6 +98,14 @@ Return **only valid JSON**, using the following schema:
 3. Extract quantities:
    - Use only ONE measurement system (prefer metric: g, kg, ml, L)
    - If multiple units given, choose the first/primary one
+   - Extract ONLY the numeric amount and unit of measurement
+     * Valid: "200g", "2 cups", "1/2 tsp", "½ cup", "3 tbsp"
+     * Invalid: "½ cup finely shredded" (remove "finely shredded")
+   - Stop extracting at the first preparation word:
+     * Preparation words: "finely", "coarsely", "thinly", "roughly", "chopped", 
+       "diced", "sliced", "shredded", "grated", "minced", "crushed", "beaten", 
+       "melted", "softened", "cubed", "peeled", etc.
+   - Everything after the unit goes into preparation_notes, NOT amount
    - If quantity exists: put it into `"amount"`.
    - If none exists, leave `"amount": ""`.
 
@@ -130,6 +138,26 @@ Return **only valid JSON**, using the following schema:
 - Do not invent ingredients or steps.
 - Do not omit subcomponent steps (e.g., sauces, toppings, fillings).
 - Follow this schema strictly.
+
+
+---
+
+### AMOUNT EXTRACTION EXAMPLES
+
+Input: "½ cup finely shredded cheddar cheese"
+- amount: "½ cup" (or "0.5 cup")
+- name: "cheddar cheese" 
+- preparation_notes: "finely shredded"
+
+Input: "2 large yellow onions, finely diced"
+- amount: "2"
+- name: "onions"
+- preparation_notes: "large, yellow, finely diced"
+
+Input: "200g / 7 oz streaky bacon, chopped"
+- amount: "200g"
+- name: "bacon"
+- preparation_notes: "streaky, chopped"
 
 """
 
