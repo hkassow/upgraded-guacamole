@@ -46,7 +46,7 @@ func parseHandler(w http.ResponseWriter, r *http.Request) {
     log.Printf("Prompt: %s\n", string(req.Prompt))
 
     ollamaReq := OllamaRequest{
-	Model:  "llama3:70b-instruct-q3_K_M",
+	Model:  "guac",
         Prompt: req.Prompt,
 	Stream: false,
     }
