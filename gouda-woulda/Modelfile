@@ -66,23 +66,54 @@ Return **only valid JSON**, using the following schema:
 ---
 
 ### INGREDIENT RULES
+0. Remove non-essential information from all fields:
+   - Remove parenthetical notes about substitutions, omissions, or recipe notes
+     * "(Note 5 to omit)" → remove entirely
+     * "(see notes)" → remove entirely
+     * "(optional)" → add "optional" to preparation_notes if meaningful
+   - Remove alternative measurements - keep only ONE unit system:
+     * "200g / 7 oz" → keep "200g" (prefer metric)
+     * "1 cup / 240ml" → keep "1 cup" (prefer volume for liquids)
+   - Remove recipe cross-references:
+     * "(Note 5)", "(see step 3)", "(*))" → remove entirely
 
 1. Normalize ingredient names:
-   - Remove brand or marketing words (e.g., “Organic Kirkland Butter” → “butter”).
+   - Remove brand or marketing words (e.g., "Organic Kirkland Butter" → "butter").
+   - Remove cut/style descriptors that describe the type or cut of the ingredient:
+     * "streaky bacon" → name: "bacon", add "streaky" to preparation_notes
+     * "ribeye steak" → name: "steak", add "ribeye cut" to preparation_notes
+     * "russet potatoes" → name: "potatoes", add "russet" to preparation_notes
+     * "roma tomatoes" → name: "tomatoes", add "roma" to preparation_notes
+     * "yellow onion" → name: "onion", add "yellow" to preparation_notes
+   - Keep only the base ingredient name in the `"name"` field.
+   - Move removed descriptors to `"preparation_notes"`.
 
 2. Preserve preparation descriptors:
-   - “thinly sliced”, “softened”, “beaten”, “melted”, etc.
+   - "thinly sliced", "softened", "beaten", "melted", "chopped", "diced", etc.
    - Remove from ingredient name, but preserve in preparation_notes
+   - If multiple preparation notes exist, separate them with commas:
+     * "streaky bacon, chopped" → preparation_notes: "streaky, chopped"
+     * "yellow onion, diced finely" → preparation_notes: "yellow, diced finely"
 
 3. Extract quantities:
+   - Use only ONE measurement system (prefer metric: g, kg, ml, L)
+   - If multiple units given, choose the first/primary one
    - If quantity exists: put it into `"amount"`.
    - If none exists, leave `"amount": ""`.
 
 4. Extract preparation notes:
+   - Combine all preparation descriptors and variety/cut descriptors with commas
+   - Order: variety/cut first, then preparation methods
+     * Example: "yellow, diced" or "streaky, chopped"
    - If none exist, leave `"preparation_notes": ""`.
+   - Do NOT include recipe notes, cross-references, or substitution suggestions
 
 5. Split combined ingredients:
-   - “2 eggs, beaten” → name: "eggs", amount: "2", preparation_notes: "beaten"
+   - "2 eggs, beaten" → name: "eggs", amount: "2", preparation_notes: "beaten"
+
+6. Handle duplicate ingredients:
+   - If the same ingredient appears multiple times, create separate entries.
+   - Do NOT attempt to combine or add quantities.
 
 6. Handle duplicate ingredients:
    - If the same ingredient appears multiple times, create separate entries.
