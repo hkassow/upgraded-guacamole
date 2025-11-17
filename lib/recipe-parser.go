@@ -15,7 +15,7 @@ import (
 type Ingredient struct {
     Name   string `json:"name"`
     Amount string `json:"amount"`
-    PreparationNotes string `json:"prep_notes"`
+    PreparationNotes string `json:"preparation_notes"`
 }
 
 type RecipeParsed struct {

@@ -1,6 +1,7 @@
 package lib
 
 import (
+	"log"
 	"context"
 	"encoding/json"
 	"go-guacamole/db"
@@ -59,6 +60,7 @@ func SaveParsedRecipe(ctx context.Context, title string, parsed *RecipeParsed) e
         	}
 
         	// Link recipe + ingredient
+		log.Println("HELLO INGREDIENTS", ing)
         	_, err = pool.Exec(ctx,
         	    `INSERT INTO recipe_ingredient (recipe_id, ingredient_id, amount, prep_notes)
         	     VALUES ($1, $2, $3, $4)`,

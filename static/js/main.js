@@ -31,6 +31,7 @@ async function makeRequest() {
         responseDiv.className = 'success';
         responseDiv.textContent = 'Success (' + response.status + '):\n' + data;
     } catch (error) {
+	console.log(error);
         responseDiv.className = 'error';
         responseDiv.textContent = 'Error:\n' + error.message;
     } finally {
@@ -68,11 +69,12 @@ async function fetchRecipes() {
                 card.innerHTML = `
                     <h3>${r.title}</h3>
                 `;
+		responseDiv.appendChild(card);
 		createRecipeModal(card, r)
-                responseDiv.appendChild(card);
             });
         }
     } catch (error) {
+	console.log(error);
         responseDiv.className = 'error';
         responseDiv.textContent = 'Error:\n' + error.message;
     } finally {
@@ -182,7 +184,7 @@ function createRecipeModal(card, recipe) {
     });
 
     modal.innerHTML = `
-        <div class="modal-content" style="max-width: 800px; width: 70%;>
+        <div class="modal-content" style="max-width: 800px; width: 70%;">
             <span class="close">&times;</span>
             <h2>${recipe.title}</h2>
             <h3>Ingredients</h3>

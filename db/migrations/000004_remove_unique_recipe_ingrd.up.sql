@@ -1,0 +1,2 @@
+ALTER TABLE recipe_ingredient
+DROP CONSTRAINT recipe_ingredient_recipe_id_ingredient_id_key;

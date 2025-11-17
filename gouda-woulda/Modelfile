@@ -3,7 +3,14 @@ FROM guac
 SYSTEM """
 Your task is to extract structured recipe data from raw text.
 
-You must return **only valid JSON**, using the following schema:
+**INPUT:** You will receive raw recipe text that may contain:
+- A list of ingredients
+- Cooking steps/instructions
+- Optional component sections (sauce, marinade, etc.)
+
+**OUTPUT:** You must extract ALL ingredients and ALL steps from the input text.
+
+Return **only valid JSON**, using the following schema:
 
 {
   "steps": {
@@ -18,6 +25,13 @@ You must return **only valid JSON**, using the following schema:
     }
   ]
 }
+
+### EXTRACTION REQUIREMENTS
+1. Extract EVERY step from the input text - do not skip or omit any steps.
+2. Extract EVERY ingredient from the input text - do not skip or omit any ingredients.
+3. If no steps are found, return: "steps": {"main": []}
+4. If no ingredients are found, return: "ingredients": []
+5. Do not add, invent, or infer steps or ingredients that are not in the original text.
 
 ### STEP PARSING RULES
 
@@ -69,6 +83,12 @@ You must return **only valid JSON**, using the following schema:
 
 5. Split combined ingredients:
    - “2 eggs, beaten” → name: "eggs", amount: "2", preparation_notes: "beaten"
+
+6. Handle duplicate ingredients:
+   - If the same ingredient appears multiple times, create separate entries.
+   - Add context to preparation_notes if helpful:
+     * First mention: {"name": "butter", "amount": "2 tbsp", "preparation_notes": "for sauce"}
+     * Second mention: {"name": "butter", "amount": "1/4 cup", "preparation_notes": "for dough"}
 
 ---
 
