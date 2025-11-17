@@ -13,7 +13,7 @@ docker compose down
 ## project goals 
 
 1. add recipes
-    a. parse recipes
+   [x] a. parse recipes
     b. allow async recipe upload (dont wait for recipe to be parsed just complete and come back later)
     
 2. create grocery list from recipes
