@@ -14,7 +14,7 @@ docker compose down
 
 1. add recipes
    [x] a. parse recipes
-    b. allow async recipe upload (dont wait for recipe to be parsed just complete and come back later)
+   [x] b. allow async recipe upload (dont wait for recipe to be parsed just complete and come back later)
     
 2. create grocery list from recipes
     a. add tags to ingredients
@@ -26,6 +26,7 @@ docker compose down
 
 ## future implementations
 - send website link and parse that way
+- auto suggest ingredients when typing to add them into list (trie datastructure)
 - grocery list export to google keeps?
 - host website on web behind some type of auth?
 - show seasonal recipes (list ingredients by season, get current in season stuff?)
@@ -38,8 +39,6 @@ docker compose down
 
 
 # database additions
-~ way to tag ingredients 
-
 category table
 id, name, description(?)
     

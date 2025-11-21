@@ -3,6 +3,7 @@ package lib
 import (
 	"bytes"
 	"crypto/tls"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"net/http"
 	"time"
 	"log"
+	"go-guacamole/models"
 )
 
 type Ingredient struct {
@@ -104,3 +106,24 @@ func ParseRecipeCall(recipeText string) (*RecipeParsed, error) {
 	return parsed, nil
 }
 
+var RecipeQueue = make(chan models.RecipeJob, 100)
+
+func StartRecipeWorker() {
+    go func() {
+        for job := range RecipeQueue {
+	    log.Println("Processing recipe:", job.Name)
+
+            parsed, err := ParseRecipeCall(job.Text)
+            if err != nil {
+                log.Println("Error parsing recipe:", err)
+                continue
+            }
+
+            if err := SaveParsedRecipe(context.Background(), job.Name, parsed); err != nil {
+                log.Println("Error saving recipe:", err)
+                continue
+            }
+            log.Println("Recipe saved successfully:", job.Name)
+        }
+    }()
+}

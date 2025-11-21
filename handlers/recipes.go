@@ -3,9 +3,9 @@ package handlers
 import (
         "encoding/json"
         "net/http"
-	"log"
 
 	"go-guacamole/lib"
+	"go-guacamole/models"
 )
 
 type RawRecipe struct {
@@ -55,20 +55,13 @@ func handlePostRecipe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	
-	parsed, err := lib.ParseRecipeCall(rawRecipe.Text)
-    	if err != nil {
-        	log.Println("Error parsing recipe:", err)
-        	http.Error(w, "Failed to parse recipe", http.StatusInternalServerError)
-        	return
+	lib.RecipeQueue <- models.RecipeJob{
+        	Name: rawRecipe.Name,
+        	Text: rawRecipe.Text,
     	}
-
-	if err := lib.SaveParsedRecipe(r.Context(), rawRecipe.Name, parsed); err != nil {
-		http.Error(w, "DB save failed: "+err.Error(), 500)
-		return
-	}
 
     	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]string{
-        	"message": "Recipe added successfully",
+        	"message": "Recipe queued to be parsed",
     	})
 }

@@ -11,6 +11,7 @@ type ParsedIngredient struct {
     Name             string `json:"name"`
     Amount           string `json:"amount"`
     PreparationNotes string `json:"preparation_notes"`
+    IngredientId     int `json:"ingredient_id"`
 }
 
 type RecipeResponse struct {
@@ -81,7 +82,8 @@ func GetAllRecipes(ctx context.Context) ([]RecipeResponse, error) {
                json_agg(json_build_object(
                    'name', i.name, 
                    'amount', ri.amount, 
-                   'preparation_notes', ri.prep_notes
+                   'preparation_notes', ri.prep_notes,
+		   'ingredient_id', i.id
                )) as ingredients
         FROM recipes r
         LEFT JOIN recipe_ingredient ri ON r.id = ri.recipe_id

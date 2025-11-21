@@ -149,6 +149,9 @@ button:disabled {
     color: #555;
     font-size: 14px;
 }
+.recipe-card.selected {
+    background: var(--color-accent-yellow);
+}
 
 .modal {
     display: none; /* Hidden by default */
@@ -174,6 +177,8 @@ button:disabled {
     max-width: 400px;
     box-shadow: 0 4px 15px rgba(0,0,0,0.2);
     animation: modalFadeIn 0.25s ease;
+    max-height: 90vh;
+    overflow-y: auto;
 }
 
 .modal-content h2 {
