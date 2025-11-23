@@ -83,7 +83,7 @@ func ParseRecipeCall(recipeText string) (*RecipeParsed, error) {
 	resp, err := client.Do(req)
 
 	if err != nil {
-		return parsed, fmt.Errorf("ollama request failed: %w", err)
+	    return parsed, fmt.Errorf("ollama request failed: %w", err)
 	}
 
 	defer resp.Body.Close()
@@ -113,6 +113,17 @@ func StartRecipeWorker() {
         for job := range RecipeQueue {
 	    log.Println("Processing recipe:", job.Name)
 
+	    ctx := context.Background()
+
+            jobID := job.ID
+            if jobID == 0 {
+                var err error
+                jobID, err = CreateRecipeJob(ctx, job.Name, job.Text)
+                if err != nil {
+                    continue
+                }
+            }
+
             parsed, err := ParseRecipeCall(job.Text)
             if err != nil {
                 log.Println("Error parsing recipe:", err)
@@ -123,6 +134,9 @@ func StartRecipeWorker() {
                 log.Println("Error saving recipe:", err)
                 continue
             }
+
+            _ = MarkRecipeJobParsed(ctx, jobID)
+
             log.Println("Recipe saved successfully:", job.Name)
         }
     }()

@@ -1,0 +1,8 @@
+CREATE TABLE recipe_jobs (
+    id SERIAL PRIMARY KEY,
+    title TEXT NOT NULL,
+    text TEXT NOT NULL,
+    parsed BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);

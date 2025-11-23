@@ -57,11 +57,13 @@ function showToast(message, duration = 20000) { // 20 seconds
 function setMakingGroceryList() {
 	making_grocery_list = !making_grocery_list
 	const groceryBtn = document.getElementById("makeGroceryListBtn");
+	const submitBtn = document.getElementById("submitGroceryListBtn");
 
 	if (!making_grocery_list) {
 	    groceryBtn.textContent = "Make Grocery List"
 	    groceryBtn.style.backgroundColor = getComputedStyle(document.documentElement)
 		.getPropertyValue('--color-accent-mint');
+	   submitBtn.style.display = "none";
 
 	    document.querySelectorAll(".recipe-card.selected")
 		.forEach(card => card.classList.remove("selected"));
@@ -69,6 +71,7 @@ function setMakingGroceryList() {
 	    groceryBtn.textContent = "Stop"
 	    groceryBtn.style.backgroundColor = getComputedStyle(document.documentElement)
                 .getPropertyValue('--color-accent-pink');
+	    submitBtn.style.display = "inherit";
 
 	    
 	}

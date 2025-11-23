@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"go-guacamole/db"
+	"go-guacamole/models"
 )
 
 type ParsedIngredient struct {
@@ -117,3 +118,65 @@ func GetAllRecipes(ctx context.Context) ([]RecipeResponse, error) {
 
     return recipes, nil
 }
+
+func CreateRecipeJob(ctx context.Context, name, text string) (int, error) {
+    var jobID int
+    err := db.Pool.QueryRow(ctx,
+        `INSERT INTO recipe_jobs (title, text, parsed)
+         VALUES ($1, $2, FALSE)
+         RETURNING id`,
+        name, text,
+    ).Scan(&jobID)
+
+    if err != nil {
+        log.Println("Failed to create recipe_job:", err)
+        return 0, err
+    }
+
+    return jobID, nil
+}
+
+func MarkRecipeJobParsed(ctx context.Context, jobID int) error {
+    _, err := db.Pool.Exec(ctx,
+        `UPDATE recipe_jobs
+         SET parsed = TRUE
+         WHERE id = $1`,
+        jobID,
+    )
+
+    if err != nil {
+        log.Println("Failed to update recipe_job:", err)
+    }
+
+    return err
+}
+
+func LoadUnparsedRecipeJobs(ctx context.Context) (error) {
+    rows, err := db.Pool.Query(ctx,
+        `SELECT id, title, text 
+         FROM recipe_jobs 
+         WHERE parsed = FALSE`,
+    )
+    if err != nil {
+        return err
+    }
+    defer rows.Close()
+
+    count := 0
+
+    for rows.Next() {
+        var job models.RecipeJob
+        if err := rows.Scan(&job.ID, &job.Name, &job.Text); err != nil {
+            return err
+        }
+
+        // Queue the job directly
+        RecipeQueue <- job
+        count++
+    }
+
+    log.Printf("Queued %d unparsed recipe jobs\n", count)
+    return nil
+}
+
+

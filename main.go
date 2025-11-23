@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"context"
 
 	"go-guacamole/handlers"
 	"go-guacamole/db"
@@ -33,6 +34,9 @@ func main() {
 	// ~~~ workers ~~~
 	log.Println("Starting Recipe Worker")
 	lib.StartRecipeWorker()
+	if err := lib.LoadUnparsedRecipeJobs(context.Background()); err != nil {
+    		log.Println("Failed loading unparsed jobs:", err)
+	}
 
 	// ~~~ server ~~~
 	log.Println("Server starting on :8443...")
