@@ -7,8 +7,11 @@
 
 // -------- on page load --------
 window.addEventListener('DOMContentLoaded', () => {
+    // business
     fetchRecipes();
     fetchIngredients();
+    
+    // ux/ui 
     getSavedColorTheme();
 });
 
@@ -16,6 +19,9 @@ window.addEventListener('DOMContentLoaded', () => {
 var making_grocery_list = false;
 var global_ingredients = {};
 var global_recipes = {};
+var wakeLock = null;
+var locationFilter = false;
+var categoryFilter = false;
 
 // -------- util code --------
 async function makeRequest() {
@@ -54,6 +60,38 @@ function showToast(message, duration = 20000) { // 20 seconds
     }, duration);
 }
 
+async function enableWakeLock() {
+    try {
+        if ('wakeLock' in navigator ) {
+            wakeLock = await navigator.wakeLock.request('screen');
+
+            // Handle wake lock release (happens on page blur, minimized, etc.)
+            wakeLock.addEventListener('release', () => {
+                console.log('Screen Wake Lock was released');
+            });
+
+            console.log('Screen Wake Lock is active');
+        } else {
+            console.log('Wake Lock API not supported');
+        }
+    } catch (err) {
+        console.log('Wake Lock error:', err);
+    }
+}
+async function disableWakeLock() {
+    try {
+        if (wakeLock !== null) {
+            await wakeLock.release();
+            wakeLock = null;
+            console.log("Wake lock disabled");
+        } else {
+            console.log("Wake lock not active");
+        }
+    } catch (err) {
+        console.error("Error disabling wake lock:", err);
+    }
+}
+
 function setMakingGroceryList() {
 	making_grocery_list = !making_grocery_list
 	const groceryBtn = document.getElementById("makeGroceryListBtn");
@@ -90,17 +128,21 @@ function submitGroceryList() {
             	const fullIngredient = global_ingredients[ri.ingredient_id];
             	if (fullIngredient) {
 		    loc = fullIngredient.location;
+	            cat = fullIngredient.category || 'unspecified';
 		    if (!(loc in ingredient_collection)) {
-		    	ingredient_collection[loc] = []
-		    }
-	            let ing_string = fullIngredient.name;
+		    	ingredient_collection[loc] = {}
+		    } 
+	            let ing_string = ' - ' + fullIngredient.name;
 	            ing_string += ri.amount? `, ${ri.amount}` : '';
 		    ing_string += ri.prep_notes? `, ${ri.prep_notes}` : '';
 		    
-	            if (fullIngredient.category === 'seasoning') {
-			   	ingredient_collection['seasoning'].push(fullIngredient.name);
+	            if (cat === 'seasoning') {
+			   	ingredient_collection[cat].push(fullIngredient.name);
 		    } else {
-               	    	ingredient_collection[loc].push(ing_string);
+			if (!(cat in ingredient_collection[loc])) {
+				ingredient_collection[loc][cat] = []
+			}
+               	    	ingredient_collection[loc][cat].push(ing_string);
 		    }
             	}
        	    });
@@ -115,16 +157,30 @@ function printIngredientCollection(ingredient_collection) {
     // Sort keys
     const sortedKeys = Object.keys(ingredient_collection).sort();
 
-    sortedKeys.forEach(key => {
-        // Sort each array alphabetically
-        ingredient_collection[key].sort((a, b) =>
-            a.localeCompare(b, 'en', { sensitivity: 'base' })
-        );
+    sortedKeys.forEach(loc => {
+	output += `\`${loc}\`\n`;
 
-        output += `\`${key}\`\n`;
-        output += ingredient_collection[key].join("\n") + "\n\n";
+        const categories = ingredient_collection[loc];
+
+        // sort categories alphabetically
+        const sortedCats = Object.keys(categories).sort();
+	
+	if (loc === 'seasoning') {
+		const sorted = categories.sort();
+		output += sorted.join("\n") + "\n\n";
+	}
+        sortedCats.forEach(cat => {
+	    if (loc !== 'seasoning') {
+            	// Sort each category's ingredient list alphabetically
+            	categories[cat].sort((a, b) =>
+                	a.localeCompare(b, 'en', { sensitivity: 'base' })
+            	);
+
+            	output += categories[cat].join("\n") + "\n";
+	    }
+        });
+	output += "\n\n";
     });
-
     console.log(output.trim());
 }
 
@@ -266,6 +322,8 @@ function openModal(modalElement) {
 
     modal.style.display = 'flex';
     modal.classList.add('visible');
+
+    enableWakeLock();
 }
 
 function closeModal(modalElement) {
@@ -277,6 +335,8 @@ function closeModal(modalElement) {
     setTimeout(() => {
         modal.style.display = 'none';
     }, 200);
+
+    disableWakeLock();
 }
 
 function handleModalBackgroundClick(event, modalElement) {
@@ -375,9 +435,17 @@ function createTagIngredientsModal(ingredients) {
     modal.innerHTML = `
         <div class="modal-content" style="max-width: 900px; width: 80%;">
             <span class="close">&times;</span>
-            <h2>Tag Ingredients</h2>
-
-            <h3>Ingredients</h3>
+            <h2 style="margin-bottom: 0px; text-align: center;">Tag Ingredients</h2>
+	    <div id="filter-list">
+	        <label class="filter-toggle">
+                    <input onchange="changeFilter(true,false)" type="checkbox" id="filter-no-category">
+                    Missing Category Only
+                </label>
+                <label class="filter-toggle">
+                    <input onchange="changeFilter(false,true)" type="checkbox" id="filter-no-location">
+                    Missing Location Only
+                </label>
+	    </div>
             <div id="ingredientTagList"></div>
 
             <div style="margin-top: 20px; text-align: right;">
@@ -393,25 +461,8 @@ function createTagIngredientsModal(ingredients) {
 
     // Fill list with ingredient rows
     const listContainer = modal.querySelector("#ingredientTagList");
-
-    ingredients.forEach((ing, idx) => {
-        const row = document.createElement("div");
-        row.style.cssText = `
-            display:flex;
-            align-items:center;
-            gap:10px;
-            padding:6px 0;
-        `;
-
-        row.innerHTML = `
-            <div style="width: 200px;">${ing.name}</div>
-            <input type="text" class="catInput" data-index="${idx}" placeholder="Category" value="${ing.category || ''}">
-            <input type="text" class="locInput" data-index="${idx}" placeholder="Location" value="${ing.location || ''}">
-	    <input type="text" class="seasonInput" data-index="${idx}" placeholder="Season" value="${ing.season || ''}">
-        `;
-
-        listContainer.appendChild(row);
-    });
+    
+    addIngredientRows(listContainer, ingredients);
 
     // Save handler
     modal.querySelector("#saveIngredientTagsBtn").addEventListener("click", async () => {
@@ -450,4 +501,43 @@ function createTagIngredientsModal(ingredients) {
     });
 
 }
+function changeFilter(categoryBool, locationBool) {
+    if (categoryBool) {
+    	categoryFilter = !categoryFilter;
+	
+    } else if (locationBool) {
+    	locationFilter = !locationFilter;
+    } else {
+    	return;
+    }
+    const listContainer = document.querySelector("#ingredientTagList");
+    
+    while (listContainer.firstChild) {
+	listContainer.removeChild(listContainer.lastChild)
+    }
 
+    addIngredientRows(listContainer, Object.values(global_ingredients));
+}
+
+function addIngredientRows(container, ingredients) {
+    ingredients.forEach((ing, idx) => {
+	if ((!locationFilter || !ing.location) && (!categoryFilter || !ing.category)) {
+            const row = document.createElement("div");
+            row.style.cssText = `
+                display:flex;
+                align-items:center;
+                gap:10px;
+                padding:6px 0;
+            `;
+
+            row.innerHTML = `
+                <div style="width: 200px;">${ing.name}</div>
+                <input type="text" class="catInput" data-index="${idx}" placeholder="Category" value="${ing.category || ''}">
+                <input type="text" class="locInput" data-index="${idx}" placeholder="Location" value="${ing.location || ''}">
+                <input type="text" class="seasonInput" data-index="${idx}" placeholder="Season" value="${ing.season || ''}">
+            `;
+
+            container.appendChild(row);
+	}
+    });
+}

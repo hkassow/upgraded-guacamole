@@ -236,3 +236,44 @@ button:disabled {
     from { opacity: 0; transform: translateY(-10px); }
     to { opacity: 1; transform: translateY(0); }
 }
+
+
+/*.ingredient-filter-bar {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    margin-bottom: 10px;
+    padding: 8px;
+    background: var(--color-bg-secondary, #f3f3f3);
+    border-radius: 8px;
+} */
+#filter-list {
+   display: flex;
+}
+
+.filter-toggle {
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s, border 0.15s;
+    user-select: none;
+    width: fit-content;
+}
+
+.filter-toggle:hover {
+    background:  var(--color-accent-yellow);
+    /* background: #f0f0f0; */
+}
+
+.filter-toggle input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}
+
+.filter-toggle span {
+    font-size: 0.9rem;
+}
+
