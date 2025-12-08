@@ -8,19 +8,7 @@
     <link rel="stylesheet" href="/static/css/styles.css">
 </head>
 <body>
-    <div id="toast" style="
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: #333;
-        color: #fff;
-        padding: 10px 20px;
-        border-radius: 5px;
-        opacity: 0;
-        pointer-events: none;
-        transition: opacity 0.3s;
-        z-index: 1000;
-    "></div>
+    <div id="toast"></div>
     <div class="container">
         <h1>API Testing area</h1>
 	<div style="display:flex; width:100%; justify-content:space-between; margin-top:8px;">
@@ -28,6 +16,7 @@
 		<button onclick="openModal('tagIngredientsModal')">Tag Ingredients</button>
 	</div>
 	<br/>
+	<label class='test'> Dinner </label>
         <p>Click the button to make a request to <code>/hello</code></p>
         <button id="requestBtn" onclick="makeRequest()">Send Request</button>
         <div id="response"></div>
@@ -35,8 +24,7 @@
 
     <div class="container">
 	<div class="recipe-header">
-            <h2>Recipe List</h2>
-	    <button onclick="openModal('recipeModal')">＋ Add Recipe</button>
+		<button id="addRecipeBtn" onclick="openModal('recipeModal')">Add Recipe</button>
 	    <button id="makeGroceryListBtn" onclick="setMakingGroceryList()">Make Grocery List</button>
 	    <div></br></div>
 	    <button id="submitGroceryListBtn" onclick="submitGroceryList()">Submit Grocery List</button>
@@ -60,6 +48,13 @@
 	      <button type="submit">Save Recipe</button>
 	    </form>
 	  </div>
+	</div>
+    </div>
+    <div class="modal" id="groceryListModal" onclick="handleModalBackgroundClick(event, this)">
+	<div class="modal-content">
+	    <span class="close" onclick="closeModal(this.closest('.modal'))">&times;</span>
+	    <button id="groceryListCopyBtn">Copy</button>
+	    <textarea rows=30 cols=10 id="groceryListText"></textarea>
 	</div>
     </div>
 

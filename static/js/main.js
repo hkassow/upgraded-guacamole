@@ -13,6 +13,7 @@ window.addEventListener('DOMContentLoaded', () => {
     
     // ux/ui 
     getSavedColorTheme();
+    addWakeLockListener();
 });
 
 // -------- global var --------
@@ -50,7 +51,7 @@ async function makeRequest() {
     }
 }
 
-function showToast(message, duration = 20000) { // 20 seconds
+function showToast(message, duration = 10000) { // 10 seconds
     const toast = document.getElementById("toast");
     toast.textContent = message;
     toast.style.opacity = "1";
@@ -92,24 +93,37 @@ async function disableWakeLock() {
     }
 }
 
+function addWakeLockListener() {
+    document.addEventListener('visibilitychange', () => {
+	const open_modal = document.querySelector(".modal.visible");
+    	if (open_modal && document.visibilityState === 'visible') {
+            enableWakeLock();
+        }
+    });
+
+}
+
 function setMakingGroceryList() {
 	making_grocery_list = !making_grocery_list
 	const groceryBtn = document.getElementById("makeGroceryListBtn");
 	const submitBtn = document.getElementById("submitGroceryListBtn");
+	const addRecipeBtn = document.getElementById("addRecipeBtn");
 
 	if (!making_grocery_list) {
 	    groceryBtn.textContent = "Make Grocery List"
-	    groceryBtn.style.backgroundColor = getComputedStyle(document.documentElement)
+	    groceryBtn.style.backgroundColor = getComputedStyle(document.body)
 		.getPropertyValue('--color-accent-mint');
-	   submitBtn.style.display = "none";
+	    submitBtn.style.display = "none";
+	    addRecipeBtn.style.display = "inherit";	
 
 	    document.querySelectorAll(".recipe-card.selected")
 		.forEach(card => card.classList.remove("selected"));
 	} else {
 	    groceryBtn.textContent = "Stop"
-	    groceryBtn.style.backgroundColor = getComputedStyle(document.documentElement)
+	    groceryBtn.style.backgroundColor = getComputedStyle(document.body)
                 .getPropertyValue('--color-accent-pink');
 	    submitBtn.style.display = "inherit";
+	    addRecipeBtn.style.display = "none";
 
 	    
 	}
@@ -137,7 +151,7 @@ function submitGroceryList() {
 		    ing_string += ri.prep_notes? `, ${ri.prep_notes}` : '';
 		    
 	            if (cat === 'seasoning') {
-			   	ingredient_collection[cat].push(fullIngredient.name);
+			   	ingredient_collection[cat].push(' - ' + fullIngredient.name);
 		    } else {
 			if (!(cat in ingredient_collection[loc])) {
 				ingredient_collection[loc][cat] = []
@@ -158,7 +172,7 @@ function printIngredientCollection(ingredient_collection) {
     const sortedKeys = Object.keys(ingredient_collection).sort();
 
     sortedKeys.forEach(loc => {
-	output += `\`${loc}\`\n`;
+	output += `${loc}\n`;
 
         const categories = ingredient_collection[loc];
 
@@ -181,7 +195,14 @@ function printIngredientCollection(ingredient_collection) {
         });
 	output += "\n\n";
     });
-    console.log(output.trim());
+    const groceryModal = document.querySelector("#groceryListModal");
+    openModal(groceryModal);
+    const groceryText = document.querySelector("#groceryListText");
+    groceryText.textContent = output.trim();
+    const btn = document.getElementById("groceryListCopyBtn");
+    btn.addEventListener("click", () => {
+        navigator.clipboard.writeText(output.trim());
+    });
 }
 
 // -------- recipe code --------
@@ -203,6 +224,7 @@ async function fetchRecipes() {
         const recipes = await response.json();
 	
         if (recipes.length) {
+		recipes.sort((a,b) => { return b.title > a.title ? -1 : 1});
         	global_recipes = Object.fromEntries(recipes.map(ing => [ing.id, ing]))
         }
 
@@ -280,6 +302,27 @@ async function submitRecipeForm(event) {
     }
 }
 
+async function submitRecipeChanges(id, updated_steps, updated_ingredients, modal) {
+    if (!updated_steps?.length && !updated_ingredients?.length) {
+    	showToast('No changes were made to the recipe');
+	return;
+    }
+    try {
+    	const response = await fetch('/recipes', {
+	    method: 'PATCH',
+	    headers: {'Content-Type': 'application/json' },
+	    body: JSON.stringify({recipe_id: id, updated_steps, updated_ingredients})
+	});
+	if (!response.ok) throw new Error('Failed to edit recipe');
+
+	fetchRecipes();
+	closeModal(modal);
+	showToast('Recipe updated!');
+    } catch (err) {
+    	console.error('Error editing recipe:', err);
+    }
+}
+
 
 // -------- dark mode code --------
 function toggleDarkMode() {
@@ -345,7 +388,6 @@ function handleModalBackgroundClick(event, modalElement) {
     }
 }
 
-
 function createRecipeModal(card, recipe) {
     const modal = document.createElement('div');
     modal.className = 'modal';
@@ -357,21 +399,88 @@ function createRecipeModal(card, recipe) {
         <div class="modal-content" style="max-width: 800px; width: 70%;">
             <span class="close">&times;</span>
             <h2>${recipe.title}</h2>
-            <h3>Ingredients</h3>
-            <ul class="ingredientsList"></ul>
-            <div class="stepsContainer"></div>
+	    <br>
+	    <button class="edit-recipe-btn" data-mode="view">Edit Recipe</button>
+	    <div class="viewRecipe">
+            	<h3>Ingredients</h3>
+            	<ul class="ingredientsList"></ul>
+           	<div class="stepsContainer"></div>
+	    </div>
+	    <div class="editRecipe" style="display: none;">
+	        <h3>Edit Ingredients</h3>
+		<div class="editIngredientsList"></div>
+		<div class="editStepsContainer">
+		    <h3>Instructions</h3>
+		    <label>Main steps</label>
+		</div>
+		<br/>
+		<button class="submit-edit-recipe-btn"> Submit Changes</button>
+	    </div>
         </div>
     `;
 
     document.body.appendChild(modal);
 
     modal.querySelector('.close').addEventListener('click', () => closeModal(modal));
+    // open recipe click
     card.addEventListener('click', () => {
 	if (making_grocery_list) {
 		card.classList.toggle("selected");
 	} else {
         	openModal(modal);
 	}
+    });
+
+    // edit recipe-modal click
+    modal.querySelector(".edit-recipe-btn").addEventListener("click", (event) => {
+       const viewSection = modal.querySelector(".viewRecipe");
+       const editSection = modal.querySelector(".editRecipe");
+       const button = event.target;
+
+       const isEditing = button.dataset.mode === "editing";
+
+       if (!isEditing) {
+           button.innerText = "View Recipe";
+           button.dataset.mode = "editing";
+
+           viewSection.style.display = "none";
+           editSection.style.display = "block";
+       } else {
+           button.innerText = "Edit Recipe";
+           button.dataset.mode = "view";
+
+           viewSection.style.display = "block";
+           editSection.style.display = "none";
+       }
+    });
+    
+    // edit recipe confirm
+    modal.querySelector(".submit-edit-recipe-btn").addEventListener("click", (event) => {
+	const originals = recipe.ingredients;
+	const updated_ingredients = recipe.ingredients.map((ing, idx) => {
+            return {
+		...ing,
+		idx: idx,
+                name: modal.querySelector(`.nameInput[data-index="${idx}"]`).value.trim(),
+                amount: modal.querySelector(`.amountInput[data-index="${idx}"]`).value.trim(),
+                preparation_notes: modal.querySelector(`.prepInput[data-index="${idx}"]`).value.trim()
+            };
+        }).filter(ing => ing.name != originals[ing.idx].name || ing.amount != originals[ing.idx].amount || ing.preparation_notes != originals[ing.idx].preparation_notes).map(({idx, ...keepAttrs}) => keepAttrs);
+
+	
+	const updated_instructions = Array.from(modal.querySelectorAll('.edit-instructions'), (ing) => {
+	    return {
+		original_steps: ing.dataset.originalInstructions.trim(),
+    		new_steps: ing.value.trim(),
+	        step_name: ing.dataset.name
+            }
+	}).filter(ing => ing.original_steps !== ing.new_steps);
+
+	submitRecipeChanges(recipe.id, updated_instructions, updated_ingredients, modal);
+	
+	// for updated ingredients if only the amount or prep notes changed we dont need a new ingredient x recipe relation
+	// if name changes find ingredient or create and then change the linked keys
+
     });
 
     // Populate ingredients
@@ -382,22 +491,58 @@ function createRecipeModal(card, recipe) {
         ingredientsList.appendChild(li);
     });
 
+    // Populatae edit ingredients
+    const editIngredientsList = modal.querySelector('.editIngredientsList');
+    recipe.ingredients.forEach((ing, idx) => {
+    	const row = document.createElement('div');
+            row.style.cssText = `
+                display:flex;
+                align-items:center;
+                gap:10px;
+                padding:6px 0;
+            `;
+	row.innerHTML = `
+            <input type="text" class="nameInput" data-index="${idx}" placeholder="Name" value="${ing.name || ''}">
+            <input type="text" class="amountInput" data-index="${idx}" placeholder="Amount" value="${ing.amount || ''}">
+            <input type="text" class="prepInput" data-index="${idx}" placeholder="Prep Notes" value="${ing.preparation_notes || ''}">
+	`;
+	editIngredientsList.appendChild(row);
+    });
+    
+
     // Populate steps
     const stepsContainer = modal.querySelector('.stepsContainer');
+    const editStepsContainer = modal.querySelector('.editStepsContainer');
     if (recipe.steps.main) {
         const mainSection = document.createElement('div');
         const mainTitle = document.createElement('h3');
         mainTitle.textContent = 'Instructions';
         mainSection.appendChild(mainTitle);
     
+	let fullInstructions = '';
+	let rows = 1;
+
         const mainOl = document.createElement('ol');
         recipe.steps.main.forEach(step => {
             const li = document.createElement('li');
             li.textContent = step;
             mainOl.appendChild(li);
+	    if (fullInstructions) {
+	    	fullInstructions += '\n\n';
+	    }
+	    fullInstructions += step
+            rows += 1;
         });
         mainSection.appendChild(mainOl);
         stepsContainer.appendChild(mainSection);
+	
+	const editMain = document.createElement('textarea');
+	editMain.textContent = fullInstructions;
+	editMain.className = 'edit-instructions';
+	editMain.dataset.originalInstructions = fullInstructions;
+	editMain.dataset.name = 'main'
+	editMain.rows = rows * 3;
+	editStepsContainer.append(editMain);
     }
     
     // Add other subcomponents
@@ -408,15 +553,34 @@ function createRecipeModal(card, recipe) {
         const title = document.createElement('h3');
         title.textContent = component.charAt(0).toUpperCase() + component.slice(1);
         section.appendChild(title);
+
+        let fullInstructions = '';
+        let rows = 1;
     
         const ol = document.createElement('ol');
         steps.forEach(step => {
             const li = document.createElement('li');
             li.textContent = step;
             ol.appendChild(li);
+            if (fullInstructions) {
+                fullInstructions += '\n\n';
+            }
+            fullInstructions += step
+            rows += 1;
         });
         section.appendChild(ol);
         stepsContainer.appendChild(section);
+	
+	const label = document.createElement('label');
+	label.textContent = component.charAt(0).toUpperCase() + component.slice(1);
+	const editBox = document.createElement('textarea');
+	editBox.textContent = fullInstructions;
+	editBox.className = 'edit-instructions';
+	editBox.dataset.originalInstructions = fullInstructions;
+	editBox.dataset.name = component;
+	editBox.rows = rows * 3;
+	editStepsContainer.append(label);
+	editStepsContainer.append(editBox);
     });
 }
 
@@ -520,6 +684,7 @@ function changeFilter(categoryBool, locationBool) {
 }
 
 function addIngredientRows(container, ingredients) {
+    ingredients.sort();
     ingredients.forEach((ing, idx) => {
 	if ((!locationFilter || !ing.location) && (!categoryFilter || !ing.category)) {
             const row = document.createElement("div");

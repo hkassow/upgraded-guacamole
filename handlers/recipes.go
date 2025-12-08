@@ -11,6 +11,8 @@ import (
 type RawRecipe struct {
     Name     string `json:"name"`
     Text     string `json:"text"`
+
+
 }
 
 func respondJSON(w http.ResponseWriter, data interface{}) {
@@ -25,6 +27,8 @@ func RecipesHandler(w http.ResponseWriter, r *http.Request) {
 		handleGetRecipes(w, r)
 	case http.MethodPost:
 		handlePostRecipe(w, r)
+	case http.MethodPatch:
+		handlePatchRecipe(w,r)
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
@@ -64,4 +68,21 @@ func handlePostRecipe(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{
         	"message": "Recipe queued to be parsed",
     	})
+}
+func handlePatchRecipe(w http.ResponseWriter, r *http.Request) {
+	var updateReq models.UpdateRecipeRequest
+	if err := json.NewDecoder(r.Body).Decode(&updateReq); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	ctx := r.Context()	
+	err := lib.UpdateRecipe(ctx, updateReq.RecipeID, updateReq)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	
+	w.WriteHeader(http.StatusOK)
+    	w.Write([]byte(`{"status":"ok"}`))
 }
