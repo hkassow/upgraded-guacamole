@@ -9,9 +9,9 @@
 </head>
 <body>
     <div id="toast"></div>
-    <div class="container">
+    <div class="container dev">
         <h1>API Testing area</h1>
-	<div style="display:flex; width:100%; justify-content:space-between; margin-top:8px;">
+		<div style="display:flex; width:100%; justify-content:space-between; margin-top:8px;">
 		<button onclick="toggleDarkMode()">Toggle Dark Mode</button>
 		<button onclick="openModal('tagIngredientsModal')">Tag Ingredients</button>
 	</div>
@@ -29,9 +29,11 @@
 	    <div></br></div>
 	    <button id="submitGroceryListBtn" onclick="submitGroceryList()">Submit Grocery List</button>
 	</div>
+	<div class="dev">
         <p>Click the button to fetch recipes from <code>/recipes</code></p>
         <button id="recipesBtn" onclick="fetchRecipes()">Get Recipes</button>
-        <div id="recipesResponse"></div>
+	</div>
+    <div id="recipesResponse"></div>
 
 	<!-- Recipe Add Modal -->
 	<div id="recipeModal" class="modal" onclick="handleModalBackgroundClick(event, this)">

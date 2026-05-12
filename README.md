@@ -10,44 +10,23 @@ docker compose up --build
 
 docker compose down
 
-## project goals 
+# Access db
+docker exec -it guac psql -U postgres -d guac
 
-1. add recipes
-   [x] a. parse recipes
-   [x] b. allow async recipe upload (dont wait for recipe to be parsed just complete and come back later)
-    
-2. create grocery list from recipes
-    a. add tags to ingredients
-    b. combine similar tags together
-    c. add lone ingredients
+## project todo 
 
-3. filter for recipes/ingredients 
+1. add table for user (just id + name (?)) + update table to include user option for recipe
+2. backup db
+3. for grocery list group same named ingredient with amount next to each other 
+4. allow adding items multiple times
+5. add a season json so produce can be given season automattically
 
 
 ## future implementations
 - send website link and parse that way
 - auto suggest ingredients when typing to add them into list (trie datastructure)
-- grocery list export to google keeps?
-- host website on web behind some type of auth?
 - show seasonal recipes (list ingredients by season, get current in season stuff?)
 - photo upload
-- export recipes from sites? (paste link and then copy recipe?)
 - allow listing ingredients without tags
-- have ingredient lister that shows which need tags
-
-
-
-
-# database additions
-category table
-id, name, description(?)
-    
-    (dinner, lunch, breakfast, snack, dessert, soup?)
-
-recipe_category table
-id, recipe_id, category_id
-
-comment table (?)
-id, recipe_id, text
 
 

@@ -224,7 +224,7 @@ async function fetchRecipes() {
         const recipes = await response.json();
 	
         if (recipes.length) {
-		recipes.sort((a,b) => { return b.title > a.title ? -1 : 1});
+		    recipes.sort((a,b) => { return b.title.toLowerCase() > a.title.toLowerCase() ? -1 : 1});
         	global_recipes = Object.fromEntries(recipes.map(ing => [ing.id, ing]))
         }
 
@@ -495,18 +495,18 @@ function createRecipeModal(card, recipe) {
     const editIngredientsList = modal.querySelector('.editIngredientsList');
     recipe.ingredients.forEach((ing, idx) => {
     	const row = document.createElement('div');
-            row.style.cssText = `
-                display:flex;
-                align-items:center;
-                gap:10px;
-                padding:6px 0;
-            `;
-	row.innerHTML = `
+        row.style.cssText = `
+            display:flex;
+            align-items:center;
+            gap:10px;
+            padding:6px 0;
+        `;
+	    row.innerHTML = `
             <input type="text" class="nameInput" data-index="${idx}" placeholder="Name" value="${ing.name || ''}">
             <input type="text" class="amountInput" data-index="${idx}" placeholder="Amount" value="${ing.amount || ''}">
             <input type="text" class="prepInput" data-index="${idx}" placeholder="Prep Notes" value="${ing.preparation_notes || ''}">
-	`;
-	editIngredientsList.appendChild(row);
+	    `;
+	    editIngredientsList.appendChild(row);
     });
     
 
@@ -519,30 +519,30 @@ function createRecipeModal(card, recipe) {
         mainTitle.textContent = 'Instructions';
         mainSection.appendChild(mainTitle);
     
-	let fullInstructions = '';
-	let rows = 1;
+	    let fullInstructions = '';
+	    let rows = 1;
 
         const mainOl = document.createElement('ol');
         recipe.steps.main.forEach(step => {
             const li = document.createElement('li');
             li.textContent = step;
             mainOl.appendChild(li);
-	    if (fullInstructions) {
-	    	fullInstructions += '\n\n';
-	    }
-	    fullInstructions += step
+	        if (fullInstructions) {
+	    	    fullInstructions += '\n\n';
+	        }
+	        fullInstructions += step
             rows += 1;
         });
         mainSection.appendChild(mainOl);
         stepsContainer.appendChild(mainSection);
 	
-	const editMain = document.createElement('textarea');
-	editMain.textContent = fullInstructions;
-	editMain.className = 'edit-instructions';
-	editMain.dataset.originalInstructions = fullInstructions;
-	editMain.dataset.name = 'main'
-	editMain.rows = rows * 3;
-	editStepsContainer.append(editMain);
+	    const editMain = document.createElement('textarea');
+	    editMain.textContent = fullInstructions;
+	    editMain.className = 'edit-instructions';
+	    editMain.dataset.originalInstructions = fullInstructions;
+	    editMain.dataset.name = 'main'
+	    editMain.rows = rows * 3;
+	    editStepsContainer.append(editMain);
     }
     
     // Add other subcomponents
@@ -567,9 +567,9 @@ function createRecipeModal(card, recipe) {
             }
             fullInstructions += step
             rows += 1;
-        });
-        section.appendChild(ol);
-        stepsContainer.appendChild(section);
+    });
+    section.appendChild(ol);
+    stepsContainer.appendChild(section);
 	
 	const label = document.createElement('label');
 	label.textContent = component.charAt(0).toUpperCase() + component.slice(1);
@@ -633,35 +633,38 @@ function createTagIngredientsModal(ingredients) {
         const updated = ingredients.map((ing, idx) => {
             return {
                 ...ing,
-                category: modal.querySelector(`.catInput[data-index="${idx}"]`).value.trim(),
-                location: modal.querySelector(`.locInput[data-index="${idx}"]`).value.trim(),
-		season: modal.querySelector(`.seasonInput[data-index="${idx}"]`).value.trim()
+                category: modal.querySelector(`.catInput[data-index="${ing.id}"]`)?.value?.trim(),
+                location: modal.querySelector(`.locInput[data-index="${ing.id}"]`)?.value?.trim(),
+	            season: modal.querySelector(`.seasonInput[data-index="${ing.id}"]`)?.value?.trim()
             };
         }).filter(ing => ing.category || ing.location || ing.season);
-	if (updated.length === 0) {
-		showToast("No changes to save");
-		return;
-	}
-	try {
-        	const resp = await fetch("/ingredients", {
+
+	    if (updated.length === 0) {
+		    showToast("No changes to save");
+		    return;
+	    }
+	    try {
+            const resp = await fetch("/ingredients", {
         	    method: "POST",
         	    headers: { "Content-Type": "application/json" },
         	    body: JSON.stringify(updated),
-        	});
+            });
 
-        	if (!resp.ok) {
-        	    alert("Failed to save ingredients");
-        	    return;
-        	}
+            if (!resp.ok) {
+                alert("Failed to save ingredients");
+                return;
+            }
 		
-        	showToast("Ingredients saved successfully!");
-		fetchIngredients();
-        	closeModal(modal);
+            showToast("Ingredients saved successfully!");
+		    fetchIngredients();
+            closeModal(modal);
+		    locationFilter = false;
+		    categoryFilter = false;
 
-    	} catch (err) {
+        } catch (err) {
         	console.error("Failed to save ingredients:", err);
         	showToast("Error saving ingredients.");
-    	}
+        }
     });
 
 }
@@ -677,14 +680,13 @@ function changeFilter(categoryBool, locationBool) {
     const listContainer = document.querySelector("#ingredientTagList");
     
     while (listContainer.firstChild) {
-	listContainer.removeChild(listContainer.lastChild)
+	    listContainer.removeChild(listContainer.lastChild)
     }
-
     addIngredientRows(listContainer, Object.values(global_ingredients));
 }
 
 function addIngredientRows(container, ingredients) {
-    ingredients.sort();
+    ingredients.sort((a,b) => {return a.name.toLowerCase() > b.name.toLowerCase() ? 1 : -1});
     ingredients.forEach((ing, idx) => {
 	if ((!locationFilter || !ing.location) && (!categoryFilter || !ing.category)) {
             const row = document.createElement("div");
@@ -697,9 +699,9 @@ function addIngredientRows(container, ingredients) {
 
             row.innerHTML = `
                 <div style="width: 200px;">${ing.name}</div>
-                <input type="text" class="catInput" data-index="${idx}" placeholder="Category" value="${ing.category || ''}">
-                <input type="text" class="locInput" data-index="${idx}" placeholder="Location" value="${ing.location || ''}">
-                <input type="text" class="seasonInput" data-index="${idx}" placeholder="Season" value="${ing.season || ''}">
+                <input type="text" class="catInput" data-index="${ing.id}" placeholder="Category" value="${ing.category || ''}">
+                <input type="text" class="locInput" data-index="${ing.id}" placeholder="Location" value="${ing.location || ''}">
+                <input type="text" class="seasonInput" data-index="${ing.id}" placeholder="Season" value="${ing.season || ''}">
             `;
 
             container.appendChild(row);

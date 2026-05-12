@@ -141,6 +141,7 @@ button:disabled {
     color: var(--color-text-dark);
     cursor: pointer;
     transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    text-transform: capitalize;
 }
 .recipe-card:hover {
     transform: translateY(-2px);
@@ -292,4 +293,8 @@ button:disabled {
     font-size: 0.875rem;
     font-weight: 500;
     transition: all 0.2s ease;
+}
+
+.dev {
+    display: none;
 }
