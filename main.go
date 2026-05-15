@@ -16,14 +16,17 @@ func main() {
 	http.HandleFunc("/recipes", handlers.RecipesHandler) 
 	http.HandleFunc("/ingredients", handlers.IngredientsHandler)
 
+	http.HandleFunc("/auth/google/login", handlers.GoogleLogin)
+	http.HandleFunc("/auth/google/callback", handlers.GoogleCallback)
+
 	// ~~~ frontend ~~~
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-            http.ServeFile(w, r, "index.html")
-    	})
+        http.ServeFile(w, r, "index.html")
+    })
 
-    	// ~~~ static assets ~~~
-    	fs := http.FileServer(http.Dir("static"))
-    	http.Handle("/static/", http.StripPrefix("/static/", fs))
+    // ~~~ static assets ~~~
+	fs := http.FileServer(http.Dir("static"))
+    http.Handle("/static/", http.StripPrefix("/static/", fs))
 
 	// ~~~ db ~~~
 	db.Connect()
@@ -35,8 +38,11 @@ func main() {
 	log.Println("Starting Recipe Worker")
 	lib.StartRecipeWorker()
 	if err := lib.LoadUnparsedRecipeJobs(context.Background()); err != nil {
-    		log.Println("Failed loading unparsed jobs:", err)
+    	log.Println("Failed loading unparsed jobs:", err)
 	}
+
+	// ~~~ start init ~~~
+	handlers.InitGoogle()
 
 	// ~~~ server ~~~
 	log.Println("Server starting on :8443...")

@@ -1,0 +1,4 @@
+DROP TABLE IF EXISTS users;
+
+ALTER TABLE recipes
+DROP COLUMN user_id;

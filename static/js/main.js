@@ -1,5 +1,6 @@
 // contains javascript code for main application
 // util
+// login
 // recipe
 // dark mode
 // modal
@@ -203,6 +204,11 @@ function printIngredientCollection(ingredient_collection) {
     btn.addEventListener("click", () => {
         navigator.clipboard.writeText(output.trim());
     });
+}
+
+// -------- login --------
+function loginWithGoogle() {
+    window.location.href = "/auth/google/login";
 }
 
 // -------- recipe code --------

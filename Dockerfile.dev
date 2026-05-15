@@ -9,9 +9,6 @@ RUN go install github.com/air-verse/air@latest
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy source code
-COPY . .
-
 # Expose port
 EXPOSE 8443
 

@@ -45,9 +45,9 @@ func cleanupJSON(raw string) string {
 
 func ParseRecipeCall(recipeText string) (*RecipeParsed, error) {
 	apiKey, err := LoadSecret("INTERNAL_API_KEY")
-        if err != nil {
-            log.Fatal(err)
-        }
+    if err != nil {
+        log.Fatal(err)
+    }
 	gouda_ip, err := LoadSecret("GOUDA_IP")
 	if err != nil {
 	    log.Fatal(err)

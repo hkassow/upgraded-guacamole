@@ -2,11 +2,11 @@ package handlers
 
 import (
 	"encoding/json"
-        "net/http"
+    "net/http"
 	"context"
 	"log"
 
-    	"go-guacamole/db"
+    "go-guacamole/db"
 	"go-guacamole/lib"
 )
 

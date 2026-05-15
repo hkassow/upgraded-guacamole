@@ -1,0 +1,3 @@
+ALTER TABLE users
+ADD COLUMN google_id TEXT UNIQUE,
+ADD COLUMN email TEXT;
