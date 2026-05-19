@@ -111,33 +111,33 @@ var RecipeQueue = make(chan models.RecipeJob, 100)
 func StartRecipeWorker() {
     go func() {
         for job := range RecipeQueue {
-	    log.Println("Processing recipe:", job.Name)
+			log.Println("Processing recipe:", job.Name)
 
-	    ctx := context.Background()
+			ctx := context.Background()
 
-            jobID := job.ID
-            if jobID == 0 {
-                var err error
-                jobID, err = CreateRecipeJob(ctx, job.Name, job.Text)
-                if err != nil {
-                    continue
-                }
-            }
+			jobID := job.ID
+			if jobID == 0 {
+				var err error
+				jobID, err = CreateRecipeJob(ctx, job.Name, job.Text, job.User_id)
+				if err != nil {
+					continue
+				}
+			}
 
-            parsed, err := ParseRecipeCall(job.Text)
-            if err != nil {
-                log.Println("Error parsing recipe:", err)
-                continue
-            }
+			parsed, err := ParseRecipeCall(job.Text)
+			if err != nil {
+				log.Println("Error parsing recipe:", err)
+				continue
+			}
 
-            if err := SaveParsedRecipe(context.Background(), job.Name, parsed); err != nil {
-                log.Println("Error saving recipe:", err)
-                continue
-            }
+			if err := SaveParsedRecipe(context.Background(), job.Name, job.User_id, parsed); err != nil {
+				log.Println("Error saving recipe:", err)
+				continue
+			}
 
-            _ = MarkRecipeJobParsed(ctx, jobID)
+			_ = MarkRecipeJobParsed(ctx, jobID)
 
-            log.Println("Recipe saved successfully:", job.Name)
+			log.Println("Recipe saved successfully:", job.Name)
         }
     }()
 }

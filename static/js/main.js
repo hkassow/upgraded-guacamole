@@ -11,10 +11,14 @@ window.addEventListener('DOMContentLoaded', () => {
     // business
     fetchRecipes();
     fetchIngredients();
+
+
+    /*getCurrentUser();*/
     
     // ux/ui 
     getSavedColorTheme();
     addWakeLockListener();
+    addEventListenerToMenu();
 });
 
 // -------- global var --------
@@ -209,6 +213,19 @@ function printIngredientCollection(ingredient_collection) {
 // -------- login --------
 function loginWithGoogle() {
     window.location.href = "/auth/google/login";
+}
+
+async function getCurrentUser() {
+    const res = await fetch("/auth/me", {
+        credentials: "include"
+    });
+
+    if (!res.ok) {
+        return null;
+    }
+
+    const ret = await res.json();
+    console.log(ret)
 }
 
 // -------- recipe code --------
@@ -712,5 +729,26 @@ function addIngredientRows(container, ingredients) {
 
             container.appendChild(row);
 	}
+    });
+}
+
+
+function toggleSettingsMenu(event) {
+    event.stopPropagation();
+
+    const menu = document.getElementById("settingsMenu");
+    menu.classList.toggle("visible");
+}
+
+function addEventListenerToMenu() {
+    document.addEventListener("click", (event) => {
+        const menu = document.getElementById("settingsMenu");
+
+        // Ignore clicks inside the menu
+        if (menu && menu.contains(event.target)) {
+            return;
+        }
+
+        menu?.classList.remove("visible");
     });
 }

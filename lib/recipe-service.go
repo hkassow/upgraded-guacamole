@@ -28,7 +28,7 @@ type RecipeResponse struct {
     Ingredients []ParsedIngredient  `json:"ingredients"`
 }
 
-func SaveParsedRecipe(ctx context.Context, title string, parsed *RecipeParsed) error {
+func SaveParsedRecipe(ctx context.Context, title string,  userID int, parsed *RecipeParsed) error {
 	pool := db.Pool
 
 	steps, err := json.Marshal(parsed.Steps)
@@ -38,9 +38,10 @@ func SaveParsedRecipe(ctx context.Context, title string, parsed *RecipeParsed) e
 
 	var recipeID int64
 	err = pool.QueryRow(ctx,
-		`INSERT INTO recipes (title, steps) VALUES ($1, $2) RETURNING id`,
+		`INSERT INTO recipes (title, steps, user_id) VALUES ($1, $2, $3) RETURNING id`,
 		title, 
 		steps,
+        userID,
 	).Scan(&recipeID)
 	if err != nil {
 		return err
@@ -82,21 +83,22 @@ func SaveParsedRecipe(ctx context.Context, title string, parsed *RecipeParsed) e
 }
 
 
-func GetAllRecipes(ctx context.Context) ([]RecipeResponse, error) {
-   rows, err := db.Pool.Query(ctx, `
+func GetAllRecipes(ctx context.Context, userID int) ([]RecipeResponse, error) {
+    rows, err := db.Pool.Query(ctx, `
         SELECT r.id, r.title, r.steps, 
-               json_agg(json_build_object(
-                   'name', i.name, 
-                   'amount', ri.amount, 
-                   'preparation_notes', ri.prep_notes,
-		   'ingredient_id', i.id,
-		   'recipe_ingredient_id', ri.id
-               )) as ingredients
+            json_agg(json_build_object(
+                'name', i.name, 
+               'amount', ri.amount, 
+               'preparation_notes', ri.prep_notes,
+	            'ingredient_id', i.id,
+	            'recipe_ingredient_id', ri.id
+            )) as ingredients
         FROM recipes r
         LEFT JOIN recipe_ingredient ri ON r.id = ri.recipe_id
-	LEFT JOIN ingredients i on ri.ingredient_id = i.id
+	    LEFT JOIN ingredients i on ri.ingredient_id = i.id
+        WHERE r.user_id = $1
         GROUP BY r.id
-    `)
+    `, userID)
     if err != nil {
         return nil, err
     }
@@ -268,13 +270,13 @@ func UpdateRecipe(ctx context.Context, recipeID int, req models.UpdateRecipeRequ
     return nil
 }
 
-func CreateRecipeJob(ctx context.Context, name, text string) (int, error) {
+func CreateRecipeJob(ctx context.Context, name, text string, user_id int) (int, error) {
     var jobID int
     err := db.Pool.QueryRow(ctx,
-        `INSERT INTO recipe_jobs (title, text, parsed)
-         VALUES ($1, $2, FALSE)
+        `INSERT INTO recipe_jobs (title, text, parsed, user_id)
+         VALUES ($1, $2, FALSE, $3)
          RETURNING id`,
-        name, text,
+        name, text, user_id,
     ).Scan(&jobID)
 
     if err != nil {
@@ -302,7 +304,7 @@ func MarkRecipeJobParsed(ctx context.Context, jobID int) error {
 
 func LoadUnparsedRecipeJobs(ctx context.Context) (error) {
     rows, err := db.Pool.Query(ctx,
-        `SELECT id, title, text 
+        `SELECT id, title, text, user_id 
          FROM recipe_jobs 
          WHERE parsed = FALSE`,
     )
@@ -315,7 +317,7 @@ func LoadUnparsedRecipeJobs(ctx context.Context) (error) {
 
     for rows.Next() {
         var job models.RecipeJob
-        if err := rows.Scan(&job.ID, &job.Name, &job.Text); err != nil {
+        if err := rows.Scan(&job.ID, &job.Name, &job.Text, &job.User_id); err != nil {
             return err
         }
 

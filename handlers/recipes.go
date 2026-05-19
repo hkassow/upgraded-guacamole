@@ -1,8 +1,8 @@
 package handlers
 
 import (
-        "encoding/json"
-        "net/http"
+    "encoding/json"
+    "net/http"
 
 	"go-guacamole/lib"
 	"go-guacamole/models"
@@ -37,7 +37,8 @@ func RecipesHandler(w http.ResponseWriter, r *http.Request) {
 func handleGetRecipes(w http.ResponseWriter, r *http.Request) {
     ctx := r.Context()
 
-    recipes, err := lib.GetAllRecipes(ctx)
+	userID := lib.GetUserID(r, store)
+    recipes, err := lib.GetAllRecipes(ctx, userID)
     if err != nil {
         http.Error(w, err.Error(), http.StatusInternalServerError)
         return
@@ -59,15 +60,17 @@ func handlePostRecipe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	
+	userID := lib.GetUserID(r, store)
 	lib.RecipeQueue <- models.RecipeJob{
         	Name: rawRecipe.Name,
         	Text: rawRecipe.Text,
-    	}
+			User_id: userID,
+    }
 
-    	w.WriteHeader(http.StatusCreated)
+    w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]string{
-        	"message": "Recipe queued to be parsed",
-    	})
+        "message": "Recipe queued to be parsed",
+    })
 }
 func handlePatchRecipe(w http.ResponseWriter, r *http.Request) {
 	var updateReq models.UpdateRecipeRequest

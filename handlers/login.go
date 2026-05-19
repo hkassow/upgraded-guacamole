@@ -8,7 +8,7 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"github.com/gorilla/sessions"
-    //"github.com/jackc/pgx/v5"
+    "github.com/jackc/pgx/v5"
 
 	"go-guacamole/db"
     "go-guacamole/lib"
@@ -102,7 +102,30 @@ func GoogleCallback(w http.ResponseWriter, r *http.Request) {
 		userInfo.ID,
 	).Scan(&userID)
 
+	if err != nil {
+		if err == pgx.ErrNoRows {
 
+			err = pool.QueryRow(ctx,
+				`INSERT INTO users (google_id, email, display_name)
+				 VALUES ($1, $2, $3)
+				 RETURNING id`,
+				userInfo.ID,
+				userInfo.Email,
+				userInfo.Name,
+			).Scan(&userID)
+
+			if err != nil {
+				http.Error(w, "DB insert failed", 500)
+				return
+			}
+
+		} else {
+			http.Error(w, "DB query failed", 500)
+			return
+		}
+	}
+
+	
     // 4. Create session
     if err := CreateSession(w, r, userID); err != nil {
 		http.Error(w, "Failed creating session", 500)
@@ -127,4 +150,35 @@ func CreateSession(w http.ResponseWriter, r *http.Request, userID int) error {
     }
 
     return session.Save(r, w)
+}
+
+func MeHandler(w http.ResponseWriter, r *http.Request) {
+	session, _ := store.Get(r, "session")
+
+	userID, ok := session.Values["user_id"]
+	if !ok {
+		http.Error(w, "not logged in", http.StatusUnauthorized)
+		return
+	}
+
+	// fetch user from DB
+	var user struct {
+		ID          int
+		DisplayName string
+		Email       string
+	}
+
+
+	err := db.Pool.QueryRow(r.Context(),
+		`SELECT id, display_name, email FROM users WHERE id = $1`,
+		userID,
+	).Scan(&user.ID, &user.DisplayName, &user.Email)
+
+	if err != nil {
+		http.Error(w, "user not found", 404)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(user)
 }

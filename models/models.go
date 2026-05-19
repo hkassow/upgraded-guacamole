@@ -4,6 +4,7 @@ type RecipeJob struct {
 	ID int
 	Name string
 	Text string
+    User_id int
 }
 
 type UpdateRecipeRequest struct {

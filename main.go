@@ -18,6 +18,7 @@ func main() {
 
 	http.HandleFunc("/auth/google/login", handlers.GoogleLogin)
 	http.HandleFunc("/auth/google/callback", handlers.GoogleCallback)
+	http.HandleFunc("/auth/me", handlers.MeHandler)
 
 	// ~~~ frontend ~~~
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

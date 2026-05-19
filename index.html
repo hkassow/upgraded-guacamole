@@ -5,10 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cookbook</title>
 
-    <link rel="stylesheet" href="/static/css/styles.css?v=<?= time() ?>">
+    <link rel="stylesheet" href="/static/css/styles.css">
 </head>
 <body>
     <div id="toast"></div>
+	<div class="topbar">
+    	<div class="hamburger-container">
+        	<button class="hamburger-btn" onclick="toggleSettingsMenu(event)">
+            	☰
+        	</button>
+
+        	<div id="settingsMenu" class="settings-menu">
+            	<button onclick="toggleDarkMode()">Toggle Dark Mode</button>
+            	<button onclick="loginWithGoogle()">Login with Google</button>
+        	</div>
+    	</div>
+	</div>
     <div class="container dev">
         <h1>API Testing area</h1>
 		<div style="display:flex; width:100%; justify-content:space-between; margin-top:8px;">
@@ -54,15 +66,15 @@
 	</div>
     </div>
     <div class="modal" id="groceryListModal" onclick="handleModalBackgroundClick(event, this)">
-	<div class="modal-content">
-	    <span class="close" onclick="closeModal(this.closest('.modal'))">&times;</span>
-	    <button id="groceryListCopyBtn">Copy</button>
-	    <textarea rows=30 cols=10 id="groceryListText"></textarea>
+		<div class="modal-content">
+			<span class="close" onclick="closeModal(this.closest('.modal'))">&times;</span>
+			<button id="groceryListCopyBtn">Copy</button>
+			<textarea rows=30 cols=10 id="groceryListText"></textarea>
+		</div>
 	</div>
-    </div>
 
     <!-- External JS file -->
-	<script src="/static/js/main.js?v=<?= time() ?>"></script>
+	<script src="/static/js/main.js"></script>
 </body>
 </html>
 
