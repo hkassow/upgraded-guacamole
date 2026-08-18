@@ -1,6 +1,6 @@
 // contains javascript code for main application
 // util
-// login
+// user
 // recipe
 // dark mode
 // modal
@@ -13,7 +13,7 @@ window.addEventListener('DOMContentLoaded', () => {
     fetchIngredients();
 
 
-    /*getCurrentUser();*/
+    getCurrentUser();
     
     // ux/ui 
     getSavedColorTheme();
@@ -210,7 +210,7 @@ function printIngredientCollection(ingredient_collection) {
     });
 }
 
-// -------- login --------
+// -------- user --------
 function loginWithGoogle() {
     window.location.href = "/auth/google/login";
 }
@@ -225,7 +225,41 @@ async function getCurrentUser() {
     }
 
     const ret = await res.json();
-    console.log(ret)
+
+    document.getElementById("yourFriendCode").textContent = ret.Uuid;
+    document.getElementById("yourShareCode").textContent = `https://upgraded-guacamole.com/?recipes_of=${ret.Uuid}`;
+}
+
+async function startFollowing() {
+    const value = document.getElementById("displayFollowInput").value;
+
+    try {
+        const response = await fetch('/users/follow-new-user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({friend_code: value.trim()}),
+        });
+
+        if (!response.ok) {
+            const txt = (await response.text())?.trim();
+            if (txt === 'invalid friend code' || txt === 'user does not exist') {
+                showToast('Invalid friend code');
+            } else if (txt === 'cannot follow yourself') {
+                showToast('You cannot follow yourself')
+            } else {
+                throw new Error(txt);
+            }
+        } else {
+            showToast('Now following user');
+            fetchRecipes();
+            toggleExpandableSection();
+            toggleSettingsMenu();
+        }
+    } catch (err) {
+        showToast('Error following user, please try again later')
+        console.error('Error following user:', err);
+    }
+    
 }
 
 // -------- recipe code --------
@@ -233,11 +267,20 @@ async function fetchRecipes() {
     const btn = document.getElementById('recipesBtn');
     const responseDiv = document.getElementById('recipesResponse');
 
+    const params = new URLSearchParams(window.location.search);
+
+    const recipesOf = params.get("recipes_of");
+
     btn.disabled = true;
     responseDiv.className = 'loading';
     responseDiv.textContent = 'Loading recipes...';
     try {
-        const response = await fetch('/recipes', {
+        let url = "/recipes";
+
+        if (recipesOf) {
+            url += `?recipes_of=${encodeURIComponent(recipesOf)}`;
+        }
+        const response = await fetch(url, {
             method: 'GET',
             headers: { 'Content-Type': 'application/json' }
         });
@@ -263,13 +306,13 @@ async function fetchRecipes() {
                 card.innerHTML = `
                     <h3>${r.title}</h3>
                 `;
-		card.dataset.id = r.id;
-		responseDiv.appendChild(card);
-		createRecipeModal(card, r)
+		        card.dataset.id = r.id;
+		        responseDiv.appendChild(card);
+		        createRecipeModal(card, r)
             });
         }
     } catch (error) {
-	console.log(error);
+	    console.log(error);
         responseDiv.className = 'error';
         responseDiv.textContent = 'Error:\n' + error.message;
     } finally {
@@ -734,10 +777,13 @@ function addIngredientRows(container, ingredients) {
 
 
 function toggleSettingsMenu(event) {
-    event.stopPropagation();
+    event?.stopPropagation();
 
     const menu = document.getElementById("settingsMenu");
     menu.classList.toggle("visible");
+    document
+        .getElementById("expandableSection")
+        ?.classList.remove("visible")
 }
 
 function addEventListenerToMenu() {
@@ -750,5 +796,19 @@ function addEventListenerToMenu() {
         }
 
         menu?.classList.remove("visible");
+
+        document
+            .getElementById("expandableSection")
+            ?.classList.remove("visible")
     });
+}
+
+function toggleExpandableSection(event) {
+    event?.stopPropagation();
+
+    document
+        .getElementById("expandableSection")
+        ?.classList.toggle("visible");
+    
+    document.getElementById("displayFollowInput").value = ""
 }

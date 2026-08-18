@@ -16,8 +16,38 @@
         	</button>
 
         	<div id="settingsMenu" class="settings-menu">
+				<div class="friend-code-section">
+					<div class="friend-code-label">
+						Your Friend Code:
+					</div>
+					<div class="friend-code-row">
+						<div id="yourFriendCode" class="friend-code-value">code123</div>
+					</div>
+					<div class="friend-code-label">
+						Share Recipes:
+					</div>
+					<div class="friend-code-row">
+						<div id="yourShareCode" class="friend-code-value">code123</div>
+					</div>
+				</div>
             	<button onclick="toggleDarkMode()">Toggle Dark Mode</button>
             	<button onclick="loginWithGoogle()">Login with Google</button>
+
+				<button onclick="toggleExpandableSection(event)">
+        			Follow a friend
+    			</button>
+
+    			<div id="expandableSection" class="expandable-section">
+					<input
+						type="text"
+						id="displayFollowInput"
+						placeholder="Paste a friend code"
+					/>
+
+					<button onclick="startFollowing()">
+						Follow
+					</button>
+				</div>
         	</div>
     	</div>
 	</div>

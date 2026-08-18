@@ -3,6 +3,8 @@ package lib
 import (
 	"net/http"
 	"github.com/gorilla/sessions"
+	"context"
+	"go-guacamole/db"
 )
 
 func GetUserID(r *http.Request, store *sessions.CookieStore) (int) {
@@ -26,4 +28,18 @@ func GetUserID(r *http.Request, store *sessions.CookieStore) (int) {
 	default:
 		return 0
 	}
+}
+
+func GetUserIdByUuid(ctx context.Context, uuid string) (int) {
+    var id int
+    err := db.Pool.QueryRow(ctx,
+        `SELECT id FROM users WHERE uuid = $1`,
+        uuid,
+    ).Scan(&id)
+
+	if err != nil {
+        return 0
+    }
+
+	return id
 }

@@ -20,6 +20,8 @@ func main() {
 	http.HandleFunc("/auth/google/callback", handlers.GoogleCallback)
 	http.HandleFunc("/auth/me", handlers.MeHandler)
 
+	http.HandleFunc("/users/follow-new-user", handlers.FollowNewUser)
+
 	// ~~~ frontend ~~~
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
         http.ServeFile(w, r, "index.html")

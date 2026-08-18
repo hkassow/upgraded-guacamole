@@ -364,6 +364,94 @@ button:disabled {
     border-bottom: 1px solid white;
 }
 
+.expandable-section {
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+
+    padding: 10px 12px;
+    border-top: 1px solid rgba(127,127,127,0.15);
+
+    animation: expandDown 0.2s ease;
+}
+
+.expandable-section.visible {
+    display: flex;
+}
+
+.expandable-section input {
+    border: 1px solid rgba(127,127,127,0.25);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 0.95rem;
+    background: transparent;
+    color: inherit;
+}
+
+.expandable-section button {
+    border: none;
+    border-radius: 8px;
+    padding: 8px 10px;
+    cursor: pointer;
+    
+    background: var(--color-accent-mint);
+    color: var(--color-text-dark);
+}
+
+.expandable-section button:hover {
+    background: var(--color-accent-yellow);
+    transform: translateY(-1px);
+}
+
+@keyframes expandDown {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.friend-code-section {
+    padding: 12px;
+
+    max-width: 196px;
+
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border-radius: 8px;
+    border-bottom: 1px solid white;
+}
+
+.friend-code-label {
+    font-size: 0.8rem;
+}
+
+.friend-code-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.friend-code-value {
+    flex: 1;
+
+    padding: 8px 10px;
+
+    border-radius: 8px;
+
+    background: rgba(127,127,127,0.08);
+
+    font-size: 0.9rem;
+    opacity: 0.7;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .dev {
     display: none;
 }

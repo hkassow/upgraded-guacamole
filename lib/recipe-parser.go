@@ -57,7 +57,7 @@ func ParseRecipeCall(recipeText string) (*RecipeParsed, error) {
 		Prompt: recipeText,
 	})
 	
-	path := fmt.Sprintf("https://%v:8556/parse-recipe", gouda_ip)
+	path := fmt.Sprintf("http://%v:8556/parse-recipe", gouda_ip)
 	
 	// setup http client
 

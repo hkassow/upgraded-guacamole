@@ -37,7 +37,16 @@ func RecipesHandler(w http.ResponseWriter, r *http.Request) {
 func handleGetRecipes(w http.ResponseWriter, r *http.Request) {
     ctx := r.Context()
 
-	userID := lib.GetUserID(r, store)
+	recipesOf := r.URL.Query().Get("recipes_of")
+	
+	userID := 0
+	if recipesOf != "" {
+		userID = lib.GetUserIdByUuid(ctx, recipesOf)
+	}
+
+	if recipesOf == "" || userID == 0 {
+		userID = lib.GetUserID(r, store)
+	}
     recipes, err := lib.GetAllRecipes(ctx, userID)
     if err != nil {
         http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -87,5 +96,5 @@ func handlePatchRecipe(w http.ResponseWriter, r *http.Request) {
 	}
 	
 	w.WriteHeader(http.StatusOK)
-    	w.Write([]byte(`{"status":"ok"}`))
+    w.Write([]byte(`{"status":"ok"}`))
 }
