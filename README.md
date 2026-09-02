@@ -21,14 +21,8 @@ docker exec -it guac psql -U postgres -d guac
 1. finish setting up user
     b. logout ==> clear cache
     c. remove followers somehow
-    d. dont display everything in menu unless user is logged in
 2. backup db
-3. allow default recipe add 
-    a. allow default functionality to create a recipe directly
-    b. prompt user when they are using the ai auto fill create  
-4. change recipe modal to be the whole screen for cooking
-5. log when user is cooking a recipe (?)
-
+    
 ## future implementations
 - copy buttons for share-code + friend code
 - filter recipe types

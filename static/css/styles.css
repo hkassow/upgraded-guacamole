@@ -59,6 +59,21 @@ body {
     transition: background 0.3s ease, color 0.3s ease;
 }
 
+body.not-logged-in .only-user {
+    display: none;
+}
+body.not-logged-in .user {
+    display: none;
+}
+body.logged-in .no-user {
+    display: none;
+}
+body.logged-in .user {
+    display: inherit;
+}
+.user {
+    display: none;
+}
 .container {
     background: var(--color-container-bg);
     padding: 30px;
@@ -86,6 +101,14 @@ button:disabled {
     background: var(--color-accent-pink);
     cursor: not-allowed;
     opacity: 0.7;
+}
+
+.button-container {
+    display: flex;
+}
+
+.button-container button + button:not([hidden]) {
+    margin-left: auto;
 }
 
 #submitGroceryListBtn{
@@ -160,6 +183,19 @@ button:disabled {
     background: var(--color-accent-yellow);
 }
 
+.ingredient-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0px;
+}
+
+input,
+textarea {
+    box-sizing: border-box;
+    width: 100%;
+}
+
 .modal {
     display: none; /* Hidden by default */
     position: fixed;
@@ -187,6 +223,33 @@ button:disabled {
     max-height: 90vh;
     overflow-y: auto;
 }
+
+@media (max-width: 768px) {
+    .modal-content {
+        width: 100%;
+        max-width: none;
+        height: 100%;
+        max-height: none;
+
+        margin: 0;
+        border-radius: 0;
+        padding: 20px;
+        box-sizing: border-box;
+    }
+}
+
+.modal-content.recipe-modal {
+    max-width: 800px; 
+    width: 70%;
+}
+
+@media (max-width: 768px) {
+    .modal-content.recipe-modal {
+        width: 100%
+    }
+}
+
+
 
 .modal-content h2 {
     margin-top: 0;

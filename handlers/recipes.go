@@ -8,11 +8,8 @@ import (
 	"go-guacamole/models"
 )
 
-type RawRecipe struct {
-    Name     string `json:"name"`
-    Text     string `json:"text"`
-
-
+type DeleteRecipeRequest struct {
+    RecipeID int `json:"recipe_id"`
 }
 
 func respondJSON(w http.ResponseWriter, data interface{}) {
@@ -29,6 +26,8 @@ func RecipesHandler(w http.ResponseWriter, r *http.Request) {
 		handlePostRecipe(w, r)
 	case http.MethodPatch:
 		handlePatchRecipe(w,r)
+	case http.MethodDelete:
+	    handleDeleteRecipe(w, r)
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
@@ -58,7 +57,7 @@ func handleGetRecipes(w http.ResponseWriter, r *http.Request) {
 }
 
 func handlePostRecipe(w http.ResponseWriter, r *http.Request) {
-	var rawRecipe RawRecipe
+	var rawRecipe models.RawRecipe
 	if err := json.NewDecoder(r.Body).Decode(&rawRecipe); err != nil {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
@@ -70,16 +69,32 @@ func handlePostRecipe(w http.ResponseWriter, r *http.Request) {
 	}
 	
 	userID := lib.GetUserID(r, store)
-	lib.RecipeQueue <- models.RecipeJob{
-        	Name: rawRecipe.Name,
-        	Text: rawRecipe.Text,
-			User_id: userID,
-    }
+	if rawRecipe.Type == "manual" {
+		ctx := r.Context()	
+		err := lib.HandleManualRecipePost(ctx, userID, rawRecipe)
 
-    w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]string{
-        "message": "Recipe queued to be parsed",
-    })
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(map[string]string{
+    	    "message": "Recipe created",
+    	})
+	} else {
+	
+		lib.RecipeQueue <- models.RecipeJob{
+			Name: rawRecipe.Name,
+			Text: rawRecipe.Text,
+			User_id: userID,
+		}
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(map[string]string{
+    	    "message": "Recipe queued to be parsed",
+    	})
+	}
 }
 func handlePatchRecipe(w http.ResponseWriter, r *http.Request) {
 	var updateReq models.UpdateRecipeRequest
@@ -90,6 +105,30 @@ func handlePatchRecipe(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()	
 	err := lib.UpdateRecipe(ctx, updateReq.RecipeID, updateReq)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	
+	w.WriteHeader(http.StatusOK)
+    w.Write([]byte(`{"status":"ok"}`))
+}
+
+func handleDeleteRecipe(w http.ResponseWriter, r *http.Request) {
+	var req DeleteRecipeRequest
+
+    err := json.NewDecoder(r.Body).Decode(&req)
+    if err != nil {
+        http.Error(w, "Invalid request body", http.StatusBadRequest)
+        return
+    }
+
+    recipeID := req.RecipeID
+
+	ctx := r.Context()
+	userID := lib.GetUserID(r, store)
+
+	err = lib.DeleteRecipe(ctx, recipeID, userID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

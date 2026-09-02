@@ -7,6 +7,19 @@ type RecipeJob struct {
     User_id int
 }
 
+type RawIngredient struct {
+    Name             	string `json:"name"`
+    Amount           	string `json:"amount"`
+    PreparationNotes 	string `json:"preparation_notes"`
+}
+
+type RawRecipe struct {
+    Name     string `json:"name"`
+    Text     string `json:"text"`
+	Ingredients []RawIngredient  `json:"ingredients"`
+	Type 	 string `json:"type"`
+}
+
 type UpdateRecipeRequest struct {
     UpdatedIngredients []UpdatedIngredient `json:"updated_ingredients"`
     UpdatedSteps       []UpdatedStep       `json:"updated_steps"`

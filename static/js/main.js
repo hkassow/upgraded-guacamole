@@ -28,6 +28,8 @@ var global_recipes = {};
 var wakeLock = null;
 var locationFilter = false;
 var categoryFilter = false;
+var timer = null;
+var user = null;
 
 // -------- util code --------
 async function makeRequest() {
@@ -48,7 +50,7 @@ async function makeRequest() {
         responseDiv.className = 'success';
         responseDiv.textContent = 'Success (' + response.status + '):\n' + data;
     } catch (error) {
-	console.log(error);
+	    console.log(error);
         responseDiv.className = 'error';
         responseDiv.textContent = 'Error:\n' + error.message;
     } finally {
@@ -106,6 +108,11 @@ function addWakeLockListener() {
         }
     });
 
+}
+
+async function logCookingToBackEnd(title) {
+    const res = await fetch(`/cooking/${title}`);
+    console.log(res)
 }
 
 function setMakingGroceryList() {
@@ -220,8 +227,15 @@ async function getCurrentUser() {
         credentials: "include"
     });
 
-    if (!res.ok) {
+    user = false;
+    if (window.location.href.includes('recipes_of')) {
         return null;
+    } else if (!res.ok) {
+        document.body.classList.add("not-logged-in")
+        return null;
+    } else {
+        user = true;
+        document.body.classList.add("logged-in")
     }
 
     const ret = await res.json();
@@ -342,15 +356,13 @@ async function fetchIngredients() {
 async function submitRecipeForm(event) {
     event.preventDefault();
     const recipeForm = document.getElementById('recipeForm');
-
     const newRecipe = {
         name: recipeForm.recipeName.value.trim(),
-	text: recipeForm.recipeDescription.value.trim()    
+	    text: recipeForm.recipeDescription.value.trim()    
     };
 
     try {
         console.log('Submitting new recipe:', newRecipe);
-        // Example API call — update this for your backend
         const response = await fetch('/recipes', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -362,9 +374,108 @@ async function submitRecipeForm(event) {
         closeModal('recipeModal');
         recipeForm.reset();
 	
-	showToast('Recipe queued to be parsed, please check back later');
+	    showToast('Recipe queued to be parsed, please check back later');
     } catch (err) {
         console.error('Error saving recipe:', err);
+    }
+}
+
+async function submitManualRecipeForm(event) {
+    event.preventDefault();
+    const recipeForm = document.getElementById('manualRecipeForm');
+    const newRecipe = {
+        name: recipeForm.recipeName.value.trim(),
+	    text: recipeForm.recipeDescription.value.trim(),
+        ingredients: [],
+        type: 'manual'
+    };
+
+    document.querySelectorAll(".ingredient-row").forEach(row => {
+        const amount = row.querySelector(".ingredient-amount").value;
+        const name = row.querySelector(".ingredient-name").value;
+        const prep_notes = row.querySelector(".ingredient-prep-notes").value;
+
+        newRecipe.ingredients.push({
+            amount: amount,
+            name: name,
+            preparation_notes: prep_notes
+        });
+    });
+
+    try {
+        console.log('Submitting new recipe:', newRecipe);
+        const response = await fetch('/recipes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newRecipe),
+        });
+
+        if (!response.ok) throw new Error('Failed to save recipe');
+
+        closeModal('recipeModal');
+        recipeForm.reset();
+	
+	    showToast('Recipe added!');
+    } catch (err) {
+        console.error('Error saving recipe:', err);
+    }
+}
+
+function addIngredient() {
+    const addIngredientBtn = document.getElementById("addIngredientBtn");
+    const ingredientsList = document.getElementById("ingredientsList");
+    const ingredientRow = document.createElement("div");
+
+    ingredientRow.classList.add("ingredient-row");
+
+    ingredientRow.innerHTML = `
+        <input
+            type="text"
+            class="ingredient-amount"
+            placeholder="Amount"
+        >
+
+        <input
+            type="text"
+            class="ingredient-name"
+            placeholder="Ingredient"
+            required
+        >
+        <input
+            type="text"
+            class="ingredient-prep-notes"
+            placeholder="Prep Notes 'diced'"
+        >
+        <button type="button" class="remove-ingredient-btn">
+            Remove
+        </button>
+    `;
+
+    ingredientRow
+        .querySelector(".remove-ingredient-btn")
+        .addEventListener("click", () => {
+            ingredientRow.remove();
+        });
+
+    ingredientsList.appendChild(ingredientRow);
+}
+
+async function deleteRecipe(id, modal) {
+    try {
+    	const response = await fetch('/recipes', {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ recipe_id: id })
+        });
+        if (!response.ok) throw new Error('Failed to delete recipe');
+
+        fetchRecipes();
+        closeModal(modal);
+        showToast('Recipe deleted!');
+    } catch (err) {
+    	console.error('Error deleting recipe:', err);
     }
 }
 
@@ -445,6 +556,10 @@ function closeModal(modalElement) {
         modal.style.display = 'none';
     }, 200);
 
+    if (timer){
+        clearTimeout(timer);
+    }
+
     disableWakeLock();
 }
 
@@ -462,12 +577,17 @@ function createRecipeModal(card, recipe) {
     });
 
     modal.innerHTML = `
-        <div class="modal-content" style="max-width: 800px; width: 70%;">
+        <div class="modal-content recipe-modal">
             <span class="close">&times;</span>
-            <h2>${recipe.title}</h2>
-	    <br>
-	    <button class="edit-recipe-btn" data-mode="view">Edit Recipe</button>
-	    <div class="viewRecipe">
+            <h2 style="text-transform: capitalize;">${recipe.title}</h2>
+	        ${user? `
+                <div class="button-container">
+                    <br>
+                    <button class="edit-recipe-btn" data-mode="view">Edit Recipe</button>
+                    <button class="delete-recipe-btn" hidden>Delete Recipe</button>
+                </div>` 
+            : '' }
+	        <div class="viewRecipe">
             	<h3>Ingredients</h3>
             	<ul class="ingredientsList"></ul>
            	<div class="stepsContainer"></div>
@@ -490,35 +610,49 @@ function createRecipeModal(card, recipe) {
     modal.querySelector('.close').addEventListener('click', () => closeModal(modal));
     // open recipe click
     card.addEventListener('click', () => {
-	if (making_grocery_list) {
-		card.classList.toggle("selected");
-	} else {
-        	openModal(modal);
-	}
+        if (making_grocery_list) {
+            card.classList.toggle("selected");
+        } else {
+            openModal(modal);
+            // if modal is open for 2 minutes assume cooking
+            timer = setTimeout(() => logCookingToBackEnd(recipe.title), 120000)
+        }
     });
-
+    if (user) {
     // edit recipe-modal click
-    modal.querySelector(".edit-recipe-btn").addEventListener("click", (event) => {
-       const viewSection = modal.querySelector(".viewRecipe");
-       const editSection = modal.querySelector(".editRecipe");
-       const button = event.target;
+        const deleteRecipeBtn = modal.querySelector(".delete-recipe-btn");
 
-       const isEditing = button.dataset.mode === "editing";
+        modal.querySelector(".edit-recipe-btn").addEventListener("click", (event) => {
+            const viewSection = modal.querySelector(".viewRecipe");
+            const editSection = modal.querySelector(".editRecipe");
+            const button = event.target;
 
-       if (!isEditing) {
-           button.innerText = "View Recipe";
-           button.dataset.mode = "editing";
+            const isEditing = button.dataset.mode === "editing";
 
-           viewSection.style.display = "none";
-           editSection.style.display = "block";
-       } else {
-           button.innerText = "Edit Recipe";
-           button.dataset.mode = "view";
+            if (!isEditing) {
+                button.innerText = "View Recipe";
+                button.dataset.mode = "editing";
 
-           viewSection.style.display = "block";
-           editSection.style.display = "none";
-       }
-    });
+                deleteRecipeBtn.hidden = false;
+
+                viewSection.style.display = "none";
+                editSection.style.display = "block";
+            } else {
+                button.innerText = "Edit Recipe";
+                button.dataset.mode = "view";
+
+                deleteRecipeBtn.hidden = true;
+
+                viewSection.style.display = "block";
+                editSection.style.display = "none";
+            }
+        });
+        modal.querySelector(".delete-recipe-btn").addEventListener("click", (event) => {
+            if (confirm(`Are you sure you want to delete ${recipe.title}`)) {
+                deleteRecipe(recipe.id, modal);
+            }
+        })
+    }
     
     // edit recipe confirm
     modal.querySelector(".submit-edit-recipe-btn").addEventListener("click", (event) => {
@@ -800,6 +934,24 @@ function addEventListenerToMenu() {
         document
             .getElementById("expandableSection")
             ?.classList.remove("visible")
+    });
+    const toggleRecipeMode = document.getElementById("toggleRecipeMode");
+    const aiRecipeForm = document.getElementById("aiRecipeForm");
+    const manualRecipeForm = document.getElementById("manualRecipeForm");
+    const addIngredientBtn = document.getElementById("addIngredientBtn");
+    addIngredientBtn.addEventListener("click", addIngredient);
+
+    addIngredient();
+
+    toggleRecipeMode.addEventListener("click", () => {
+        const showingAI = !aiRecipeForm.hidden;
+
+        aiRecipeForm.hidden = showingAI;
+        manualRecipeForm.hidden = !showingAI;
+
+        toggleRecipeMode.textContent = showingAI
+            ? "Use AI Fill"
+            : "Enter Recipe Manually";
     });
 }
 

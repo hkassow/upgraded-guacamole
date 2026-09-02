@@ -15,6 +15,7 @@ func main() {
 	http.HandleFunc("/hello/", handlers.HelloHandler)
 	http.HandleFunc("/recipes", handlers.RecipesHandler) 
 	http.HandleFunc("/ingredients", handlers.IngredientsHandler)
+	http.HandleFunc("/cooking/", handlers.CookingHandler)
 
 	http.HandleFunc("/auth/google/login", handlers.GoogleLogin)
 	http.HandleFunc("/auth/google/callback", handlers.GoogleCallback)
