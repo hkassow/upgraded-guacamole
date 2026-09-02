@@ -286,7 +286,7 @@ func UpdateRecipe(ctx context.Context, recipeID int, req models.UpdateRecipeRequ
 func DeleteRecipe(ctx context.Context, recipeID int, userID int) error {
     _, err := db.Pool.Exec(ctx,
         `DELETE FROM recipes WHERE id = $1 and user_id = $2`,
-        recipeID, userID
+        recipeID, userID,
     )
     if err != nil {
         return fmt.Errorf("error deleting recipe: %w", err)

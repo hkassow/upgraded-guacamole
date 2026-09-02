@@ -244,6 +244,25 @@ async function getCurrentUser() {
     document.getElementById("yourShareCode").textContent = `https://upgraded-guacamole.com/?recipes_of=${ret.Uuid}`;
 }
 
+async function logout() {
+    const res = await fetch("/auth/logout", {
+        method: "POST",
+        credentials: "include"
+    });
+
+    if (!res.ok) {
+        console.error("Logout failed");
+        return;
+    }
+
+    user = false;
+
+    document.body.classList.remove("logged-in");
+    document.body.classList.add("not-logged-in");
+
+    window.location.reload();
+}
+
 async function startFollowing() {
     const value = document.getElementById("displayFollowInput").value;
 
@@ -935,6 +954,27 @@ function addEventListenerToMenu() {
             .getElementById("expandableSection")
             ?.classList.remove("visible")
     });
+
+    const copyBtns = document.querySelectorAll(".copy-btn");
+
+    copyBtns.forEach(copyBtn => {
+        copyBtn.addEventListener("click", async () => {
+            const text = copyBtn.dataset.copy;
+
+            const value = copyBtn.querySelector(".friend-code-value");
+
+            if (!value) return;
+
+            await navigator.clipboard.writeText(value.textContent.trim());
+
+            console.log("Copied:", value.textContent.trim());
+        });
+    });
+    
+    document.getElementById("logoutBtn").addEventListener("click", logout);
+}
+
+function addEventListenerToRecipeAdd() {
     const toggleRecipeMode = document.getElementById("toggleRecipeMode");
     const aiRecipeForm = document.getElementById("aiRecipeForm");
     const manualRecipeForm = document.getElementById("manualRecipeForm");
@@ -952,22 +992,6 @@ function addEventListenerToMenu() {
         toggleRecipeMode.textContent = showingAI
             ? "Use AI Fill"
             : "Enter Recipe Manually";
-    });
-
-    const copyBtns = document.querySelectorAll(".copy-btn");
-
-    copyBtns.forEach(copyBtn => {
-        copyBtn.addEventListener("click", async () => {
-            const text = copyBtn.dataset.copy;
-
-            const value = copyBtn.querySelector(".friend-code-value");
-
-            if (!value) return;
-
-            await navigator.clipboard.writeText(value.textContent.trim());
-
-            console.log("Copied:", value.textContent.trim());
-        });
     });
 }
 

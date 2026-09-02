@@ -19,6 +19,7 @@ func main() {
 
 	http.HandleFunc("/auth/google/login", handlers.GoogleLogin)
 	http.HandleFunc("/auth/google/callback", handlers.GoogleCallback)
+	http.HandleFunc("/auth/logout", handlers.LogoutHandler)
 	http.HandleFunc("/auth/me", handlers.MeHandler)
 
 	http.HandleFunc("/users/follow-new-user", handlers.FollowNewUser)
