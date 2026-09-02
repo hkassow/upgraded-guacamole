@@ -953,6 +953,22 @@ function addEventListenerToMenu() {
             ? "Use AI Fill"
             : "Enter Recipe Manually";
     });
+
+    const copyBtns = document.querySelectorAll(".copy-btn");
+
+    copyBtns.forEach(copyBtn => {
+        copyBtn.addEventListener("click", async () => {
+            const text = copyBtn.dataset.copy;
+
+            const value = copyBtn.querySelector(".friend-code-value");
+
+            if (!value) return;
+
+            await navigator.clipboard.writeText(value.textContent.trim());
+
+            console.log("Copied:", value.textContent.trim());
+        });
+    });
 }
 
 function toggleExpandableSection(event) {
