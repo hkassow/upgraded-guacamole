@@ -19,6 +19,7 @@ window.addEventListener('DOMContentLoaded', () => {
     getSavedColorTheme();
     addWakeLockListener();
     addEventListenerToMenu();
+    addEventListenerToRecipeAdd();
 });
 
 // -------- global var --------
@@ -431,9 +432,10 @@ async function submitManualRecipeForm(event) {
 
         if (!response.ok) throw new Error('Failed to save recipe');
 
+        fetchRecipes();
         closeModal('recipeModal');
         recipeForm.reset();
-	
+
 	    showToast('Recipe added!');
     } catch (err) {
         console.error('Error saving recipe:', err);
@@ -970,7 +972,7 @@ function addEventListenerToMenu() {
             console.log("Copied:", value.textContent.trim());
         });
     });
-    
+
     document.getElementById("logoutBtn").addEventListener("click", logout);
 }
 

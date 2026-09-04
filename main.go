@@ -13,9 +13,10 @@ import (
 func main() {
 	// ~~~ backend ~~~
 	http.HandleFunc("/hello/", handlers.HelloHandler)
+	http.HandleFunc("/cooking/", handlers.CookingHandler)
+
 	http.HandleFunc("/recipes", handlers.RecipesHandler) 
 	http.HandleFunc("/ingredients", handlers.IngredientsHandler)
-	http.HandleFunc("/cooking/", handlers.CookingHandler)
 
 	http.HandleFunc("/auth/google/login", handlers.GoogleLogin)
 	http.HandleFunc("/auth/google/callback", handlers.GoogleCallback)
