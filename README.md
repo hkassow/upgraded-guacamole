@@ -1,7 +1,5 @@
 ## upgraded-guacamole
 
-
-
 # Run locally
 go run .
 
@@ -17,23 +15,53 @@ upgraded-guacamole.com
 docker exec -it guac psql -U postgres -d guac
 
 ## project todo 
+1. vision model setup
+2. get/checkin image for testing vision model
+3. add backend tests
+    - create recipe manual
+    - create recipe ai fill (mock ai response)
+    - update recipe
+    - update ingredients
+    - delete recipe 
+    - add follower
+    - remove follower (when added)
 
-1. finish setting up user
-    b. logout ==> clear cache
-    c. remove followers somehow
-2. backup db
+4. filter recipe types
+    - your recipes
+    - recipes of people you follow
+    - show all recipes
+
+5. custom logging function
+    - maintains two logs
+        -> all logs
+        -> error logs
+    - still outputs docker logs
     
 ## future implementations
-- copy buttons for share-code + friend code
-- filter recipe types
+# website stuff
+- allow user to change users
 - add cookie setup/warning to make complient (?)
-- for grocery list group same named ingredient with amount next to each other 
-- allow adding items multiple times
-- add a season json so produce can be given season automattically
+- allow user to select that they are cooking a certain recipe (shows other people? or alerts them?)
+- remove followers somehow
+    -> maybe have an expandable list that shows the current followers
+    -> maybe edit the add follower button to expand a list for showing current followers + adding new followers
+- allow copying recipes over to your own so you can edit them
+    - setup edit/deleting recipes only if you own them
+    -> this should override the other recipe for user so it will only show one
+    -> allow "deleting recipes for followed users" so you can handpick certain recipes
+
+# recipe stuff
 - send website link and parse that way
 - auto suggest ingredients when typing to add them into list (trie datastructure)
+    -> could use for manually adding ingredients to recipe as well
+- add a season json so produce can be given season automattically
 - show seasonal recipes (list ingredients by season, get current in season stuff?)
-- photo upload
-- allow listing ingredients without tags
-- allow user to select that they are cooking a certain recipe (shows other people? or alerts them?)
+- allow recipes to have multiple ingredient sections
+    -> add db row to ingredient for grouping
 
+# grocery list
+- for grocery list group same named ingredient with amount next to each other 
+- allow adding items multiple times
+
+# unsure
+- allow listing ingredients without tags
