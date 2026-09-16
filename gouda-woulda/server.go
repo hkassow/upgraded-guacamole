@@ -27,7 +27,7 @@ type OllamaRequest struct {
 type Message struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
-    Images []sring `json:"images,omitempty"`
+    	Images []string `json:"images,omitempty"`
 }
 
 type OllamaResponse struct {
@@ -157,7 +157,7 @@ func parseImageHandler(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	http.HandleFunc("/parse-recipe", parseHandler)
-    http.HandleFunc("/parse-recipe-image", parseImageHandler)
+    	http.HandleFunc("/parse-recipe-image", parseImageHandler)
 
 
 	log.Println("Starting HTTP server on port 8556...")

@@ -18,7 +18,7 @@ ollama list
 ollama ps
 
 # start server
-go run main.go
+go run server.go
 
 
 # run model independent of server
@@ -33,7 +33,7 @@ curl -X POST http://localhost:8556/parse-recipe \
 
 
 # test vision model
-base64 -w 0 recipe-photo.jpg > image_b64.txt
+base64 -w 0 choco-cake.jpg > image_b64.txt
 
 python3 -c "
 import json
