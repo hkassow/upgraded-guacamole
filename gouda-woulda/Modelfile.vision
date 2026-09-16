@@ -1,6 +1,8 @@
-FROM qwen2.5vl:7b
+FROM qwen2.5vl:32b
+#FROM qwen2.5vl:7b
 
 PARAMETER temperature 0
+PARAMETER num_ctx 8192
 
 SYSTEM """
 You will be shown an image of a recipe (photo, screenshot, or recipe card).

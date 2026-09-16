@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"log"
+	"fmt"
 	"net/http"
 )
 
@@ -66,15 +67,21 @@ func callOllama(model, prompt string, images []string) (string, error) {
 		return "", err
 	}
 	defer resp.Body.Close()
-
+	
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
 	}
 
+	log.Printf("Ollama raw response (%s): %s\n", model, string(body))
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("ollama returned status %d: %s", resp.StatusCode, string(body))
+	}
+
 	var ollamaResp OllamaResponse
 	if err := json.Unmarshal(body, &ollamaResp); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to parse ollama response: %w (body: %s)", err, string(body))
 	}
 
 	return ollamaResp.Message.Content, nil
