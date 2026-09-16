@@ -163,16 +163,16 @@ func MeHandler(w http.ResponseWriter, r *http.Request) {
 
 	// fetch user from DB
 	var user struct {
-		ID          int
+		Uuid 		string
 		DisplayName string
 		Email       string
 	}
 
 
 	err := db.Pool.QueryRow(r.Context(),
-		`SELECT id, display_name, email FROM users WHERE id = $1`,
+		`SELECT uuid, display_name, email FROM users WHERE id = $1`,
 		userID,
-	).Scan(&user.ID, &user.DisplayName, &user.Email)
+	).Scan(&user.Uuid, &user.DisplayName, &user.Email)
 
 	if err != nil {
 		http.Error(w, "user not found", 404)
@@ -181,4 +181,31 @@ func MeHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(user)
+}
+
+func LogoutHandler(w http.ResponseWriter, r *http.Request) {
+	session, err := store.Get(r, "session")
+	if err != nil {
+		http.Error(w, "Failed getting session", http.StatusInternalServerError)
+		return
+	}
+
+	// Delete the session cookie
+	session.Options = &sessions.Options{
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	}
+
+	// Remove the user from the session
+	delete(session.Values, "user_id")
+
+	if err := session.Save(r, w); err != nil {
+		http.Error(w, "Failed logging out", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }

@@ -16,31 +16,103 @@
         	</button>
 
         	<div id="settingsMenu" class="settings-menu">
+				<div class="friend-code-section">
+					<div class="friend-code-label">
+						Your Friend Code:
+					</div>
+					<button class="copy-btn  friend-code-row">
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							width="18"
+							height="18"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						>
+							<rect x="9" y="9" width="13" height="13" rx="2"></rect>
+							<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+						</svg>
+						<div id="yourFriendCode" class="friend-code-value">code123</div>
+					</button>
+				</div>
+				<div class="friend-code-section">
+					<div class="friend-code-label">
+						Share Recipes:
+					</div>
+					<button class="copy-btn friend-code-row">
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							width="18"
+							height="18"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						>
+							<rect x="9" y="9" width="13" height="13" rx="2"></rect>
+							<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+						</svg>
+						<div id="yourShareCode" class="friend-code-value">code123</div>
+					</button>
+				</div>
             	<button onclick="toggleDarkMode()">Toggle Dark Mode</button>
-            	<button onclick="loginWithGoogle()">Login with Google</button>
+            	<button class='no-user' onclick="loginWithGoogle()">Login with Google</button>
+
+				<button class='only-user' onclick="toggleExpandableSection(event)">
+        			Follow a friend
+    			</button>
+
+    			<div id="expandableSection" class="expandable-section">
+					<input
+						type="text"
+						id="displayFollowInput"
+						placeholder="Paste a friend code"
+					/>
+
+					<button onclick="startFollowing()">
+						Follow
+					</button>
+				</div>
+				<button class='only-user' id="logoutBtn">Logout</button>
         	</div>
     	</div>
 	</div>
-    <div class="container dev">
+    <div class="container only-user dev">
         <h1>API Testing area</h1>
 		<div style="display:flex; width:100%; justify-content:space-between; margin-top:8px;">
-		<button onclick="toggleDarkMode()">Toggle Dark Mode</button>
-		<button onclick="openModal('tagIngredientsModal')">Tag Ingredients</button>
-		<button onclick="loginWithGoogle()">Continue with Google</button>
-	</div>
-	<br/>
-	<label class='test'> Dinner </label>
+			<button onclick="toggleDarkMode()">Toggle Dark Mode</button>
+			<button onclick="openModal('tagIngredientsModal')">Tag Ingredients</button>
+			<button onclick="loginWithGoogle()">Continue with Google</button>
+		</div>
+		<br/>
+		<label class='test'> Dinner </label>
         <p>Click the button to make a request to <code>/hello</code></p>
         <button id="requestBtn" onclick="makeRequest()">Send Request</button>
         <div id="response"></div>
     </div>
+	<div class="container no-user">
+		<div style="display: grid;">
+			<h1>Welcome to Upgraded-Guacamole</h1>
+			<br/>
+			<br/>
+			<span></span>
+			<button class='no-user' style="margin: auto;" onclick="loginWithGoogle()">Login with Google to Add and View Recipes!</button>
+		</div>
+	</div>
 
-    <div class="container">
-	<div class="recipe-header">
-		<button id="addRecipeBtn" onclick="openModal('recipeModal')">Add Recipe</button>
-	    <button id="makeGroceryListBtn" onclick="setMakingGroceryList()">Make Grocery List</button>
-	    <div></br></div>
-	    <button id="submitGroceryListBtn" onclick="submitGroceryList()">Submit Grocery List</button>
+    <div class="container only-user">
+	<div class="user">
+		<div class='recipe-header'>
+			<button id="addRecipeBtn" onclick="openModal('recipeModal')">Add Recipe</button>
+			<button id="makeGroceryListBtn" onclick="setMakingGroceryList()">Make Grocery List</button>
+			<div></br></div>
+			<button id="submitGroceryListBtn" onclick="submitGroceryList()">Submit Grocery List</button>
+		</div>
 	</div>
 	<div class="dev">
         <p>Click the button to fetch recipes from <code>/recipes</code></p>
@@ -53,15 +125,60 @@
 	  <div class="modal-content">
 	    <span class="close" onclick="closeModal(this.closest('.modal'))">&times;</span>
 	    <h2>Add New Recipe</h2>
-	    <form id="recipeForm" onsubmit="submitRecipeForm(event)">
-	      <label for="recipeName">Name:</label>
-	      <input type="text" id="recipeName" name="name" required />
-	
-	      <label for="recipeDescription">Description:</label>
-	      <textarea rows=10 id="recipeDescription" name="description" required></textarea>
-	
-	      <button type="submit">Save Recipe</button>
-	    </form>
+		<div class="recipe-form-container">
+			<button type="button" id="toggleRecipeMode">
+    			Send Recipe to AI to parse
+  			</button>
+
+			<!-- AI form -->
+			<form id="aiRecipeForm" onsubmit="submitRecipeForm(event)" hidden>
+				<label for="recipeName">Name:</label>
+				<input type="text" id="recipeName" name="name" required />
+
+				<label for="recipeDescription">Description:</label>
+				<textarea
+				rows="10"
+				id="recipeDescription"
+				name="description"
+				required
+				placeholder="Copy & paste a recipe including the ingredients, and the offline-model will parse it and add the recipe to your profile.
+Please allow an hour or so for it to parse (could take much longer depending on when I turn on the model)."
+				></textarea>
+
+				<button type="submit">Save Recipe</button>
+			</form>
+
+			<!-- Manual form -->
+			<form id="manualRecipeForm" onsubmit="submitManualRecipeForm(event)">
+				<label for="recipeName">Name:</label>
+				<input type="text" id="recipeName" name="name" required />
+				<div class="ingredients-section">
+					<label>Ingredients:</label>
+
+					<div id="ingredientsList"></div>
+
+					<button type="button" id="addIngredientBtn">
+						+ Add Ingredient
+					</button>
+				</div>
+
+				<label for="manualRecipeDescription">Instructions:</label>
+				<textarea
+				rows="10"
+				id="recipeDescription"
+				name="description"
+				required
+				placeholder="Enter the recipe steps here like so:
+Turn on the oven to 200 degrees Celsius
+Make dough
+Put dough into oven
+Etc."
+				></textarea>
+
+				<button type="submit">Save Recipe</button>
+			</form>
+
+		</div>
 	  </div>
 	</div>
     </div>

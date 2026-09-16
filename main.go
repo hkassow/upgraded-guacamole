@@ -13,12 +13,17 @@ import (
 func main() {
 	// ~~~ backend ~~~
 	http.HandleFunc("/hello/", handlers.HelloHandler)
+	http.HandleFunc("/cooking/", handlers.CookingHandler)
+
 	http.HandleFunc("/recipes", handlers.RecipesHandler) 
 	http.HandleFunc("/ingredients", handlers.IngredientsHandler)
 
 	http.HandleFunc("/auth/google/login", handlers.GoogleLogin)
 	http.HandleFunc("/auth/google/callback", handlers.GoogleCallback)
+	http.HandleFunc("/auth/logout", handlers.LogoutHandler)
 	http.HandleFunc("/auth/me", handlers.MeHandler)
+
+	http.HandleFunc("/users/follow-new-user", handlers.FollowNewUser)
 
 	// ~~~ frontend ~~~
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

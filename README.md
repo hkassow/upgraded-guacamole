@@ -18,15 +18,15 @@ docker exec -it guac psql -U postgres -d guac
 
 ## project todo 
 
-1. finish setting up oauth
-    a. no user ==> create
+1. finish setting up user
+    b. logout ==> clear cache
+    c. remove followers somehow
 2. backup db
-3. allow following other users or viewing their recipes ?
-4. get recipes for user only 
-
-
-
+    
 ## future implementations
+- copy buttons for share-code + friend code
+- filter recipe types
+- add cookie setup/warning to make complient (?)
 - for grocery list group same named ingredient with amount next to each other 
 - allow adding items multiple times
 - add a season json so produce can be given season automattically

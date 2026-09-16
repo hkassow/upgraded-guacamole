@@ -24,17 +24,39 @@ type ParsedIngredient struct {
 type RecipeResponse struct {
     ID          int                 `json:"id"`
     Title       string              `json:"title"`
-    Steps       map[string][]string `json:"steps"`      
+    Steps       map[string][]string `json:"steps"`
     Ingredients []ParsedIngredient  `json:"ingredients"`
 }
 
+func HandleManualRecipePost(ctx context.Context, userID int, rawRecipe models.RawRecipe) error {
+    steps := map[string][]string{
+        "main": cleanStepLines(rawRecipe.Text),
+    }
+
+    ingredients := make([]Ingredient, 0, len(rawRecipe.Ingredients))
+    for _, ingredient := range rawRecipe.Ingredients {
+        ingredients = append(ingredients, Ingredient{
+            Name:              ingredient.Name,
+            Amount:            ingredient.Amount,
+            PreparationNotes:  ingredient.PreparationNotes,
+        })
+    }
+
+    parsed := RecipeParsed{
+        Steps: steps,
+        Ingredients: ingredients,
+    }
+    log.Printf("Manually parsed recipe being added:  %+v", parsed)
+
+    return SaveParsedRecipe(ctx, rawRecipe.Name, userID, &parsed)
+}
 func SaveParsedRecipe(ctx context.Context, title string,  userID int, parsed *RecipeParsed) error {
 	pool := db.Pool
 
 	steps, err := json.Marshal(parsed.Steps)
-        if err != nil {
-                return err
-        }
+    if err != nil {
+        return err
+    }
 
 	var recipeID int64
 	err = pool.QueryRow(ctx,
@@ -96,7 +118,7 @@ func GetAllRecipes(ctx context.Context, userID int) ([]RecipeResponse, error) {
         FROM recipes r
         LEFT JOIN recipe_ingredient ri ON r.id = ri.recipe_id
 	    LEFT JOIN ingredients i on ri.ingredient_id = i.id
-        WHERE r.user_id = $1
+        WHERE r.user_id = $1 or r.user_id in (SELECT followee_id FROM users_follows WHERE follower_id = $1)
         GROUP BY r.id
     `, userID)
     if err != nil {
@@ -191,7 +213,6 @@ func UpdateRecipe(ctx context.Context, recipeID int, req models.UpdateRecipeRequ
         // --------------------------------
         if ing.Name == currentName {
             if ing.Amount != currentAmount || ing.PreparationNotes != currentNotes {
-		/*
                 _, err := db.Pool.Exec(ctx,
                     `UPDATE recipe_ingredient
                      SET amount = $1, prep_notes = $2
@@ -201,8 +222,7 @@ func UpdateRecipe(ctx context.Context, recipeID int, req models.UpdateRecipeRequ
                 if err != nil {
                     return fmt.Errorf("update recipe_ingredient: %w", err)
                 }
-		*/
-		log.Println("Updating recipe ingredient:", ing.Name)
+		        log.Println("Updating recipe ingredient:", ing.Name)
             }
             continue
         }
@@ -212,8 +232,7 @@ func UpdateRecipe(ctx context.Context, recipeID int, req models.UpdateRecipeRequ
         // --------------------------------
 
         // 1. Delete old recipe_ingredient row
-	log.Println("NEW NAME DELETING RECIPE INGRED", ing.Name)
-	/*
+	    log.Println("NEW NAME DELETING RECIPE INGRED", ing.Name)
         _, err = db.Pool.Exec(ctx,
             `DELETE FROM recipe_ingredient WHERE id = $1`,
             ing.RecipeIngredientID,
@@ -221,7 +240,6 @@ func UpdateRecipe(ctx context.Context, recipeID int, req models.UpdateRecipeRequ
         if err != nil {
             return fmt.Errorf("delete old recipe_ingredient: %w", err)
         }
-	*/
 
         // 2. Check if ingredient with new name already exists
         var newIngredientID int
@@ -230,29 +248,27 @@ func UpdateRecipe(ctx context.Context, recipeID int, req models.UpdateRecipeRequ
             ing.Name,
         ).Scan(&newIngredientID)
 
-	log.Println("DOES INGREDIENT ALREADY EXIST:", newIngredientID)
-	if err != nil {
+	    log.Println("DOES INGREDIENT ALREADY EXIST:", newIngredientID)
+	    if err != nil {
             if errors.Is(err, pgx.ErrNoRows) {
-		log.Println("INGREDIENT DOESNT EXIST CREATING IT")
+		        log.Println("INGREDIENT DOESNT EXIST CREATING IT")
                 // Create new ingredient
-		/*
-                err = db.QueryRow(ctx,
+                err = db.Pool.QueryRow(ctx,
                     `INSERT INTO ingredients (name)
-                     VALUES ($1) RETURNING id`,
+                    VALUES ($1) RETURNING id`,
                     ing.Name,
                 ).Scan(&newIngredientID)
 
                 if err != nil {
                     return fmt.Errorf("create new ingredient: %w", err)
-                }*/
+                }
             } else {
                 return fmt.Errorf("fetch ingredient: %w", err)
             }
         }
 
         // 4. Create new recipe_ingredient linking recipe + new ingredient
-	/*
-        _, err = tx.ExecContext(ctx,
+        _, err = db.Pool.Exec(ctx,
             `INSERT INTO recipe_ingredient
                 (recipe_id, ingredient_id, amount, prep_notes)
              VALUES ($1, $2, $3, $4)`,
@@ -261,11 +277,20 @@ func UpdateRecipe(ctx context.Context, recipeID int, req models.UpdateRecipeRequ
         if err != nil {
             return fmt.Errorf("create new recipe_ingredient: %w", err)
         }
-	*/
-	log.Println("DONE")
+	    log.Println("DONE")
     }
 
+    return nil
+}
 
+func DeleteRecipe(ctx context.Context, recipeID int, userID int) error {
+    _, err := db.Pool.Exec(ctx,
+        `DELETE FROM recipes WHERE id = $1 and user_id = $2`,
+        recipeID, userID,
+    )
+    if err != nil {
+        return fmt.Errorf("error deleting recipe: %w", err)
+    }
 
     return nil
 }
