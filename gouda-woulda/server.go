@@ -14,12 +14,25 @@ type ParseRequest struct {
 
 type OllamaRequest struct {
 	Model string `json:"model"`
-	Prompt string `json:"prompt"`
+	Think bool `json:"think"`
 	Stream bool `json:"stream"`
+	Messages []Message `json:"messages"`
+}
+
+type Message struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
 }
 
 type OllamaResponse struct {
-	Response string `json:"response"`
+	Model string `json:"model"`
+
+	Message struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	} `json:"message"`
+
+	Done bool `json:"done"`
 }
 
 func parseHandler(w http.ResponseWriter, r *http.Request) {
@@ -46,15 +59,21 @@ func parseHandler(w http.ResponseWriter, r *http.Request) {
     log.Printf("Prompt: %s\n", string(req.Prompt))
 
     ollamaReq := OllamaRequest{
-	Model:  "guac",
-        Prompt: req.Prompt,
+	Model:  "recipe-parser",
+	Think: false,
 	Stream: false,
+	Messages: []Message{
+	    {
+		Role: "user",
+		Content: req.Prompt,
+	    },
+	},
     }
 
     jsonReq, _ := json.Marshal(ollamaReq)
 
     resp, err := http.Post(
-        "http://localhost:11434/api/generate?stream=false",
+        "http://localhost:11434/api/chat",
         "application/json",
         bytes.NewBuffer(jsonReq),
     )
@@ -75,24 +94,19 @@ func parseHandler(w http.ResponseWriter, r *http.Request) {
 	return
     }
     
-    log.Printf("Output: %s\n", ollamaResp)
+    log.Printf("Output: %s\n", ollamaResp.Message.Content)
 
     w.Header().Set("Content-Type", "application/json")
     json.NewEncoder(w).Encode(map[string]string{
-	    "result": ollamaResp.Response,
+	    "result": ollamaResp.Message.Content,
     })
 }
 
 func main() {
 	http.HandleFunc("/parse-recipe", parseHandler)
 
-	log.Println("Starting HTTPS server on port 8556...")
-	err := http.ListenAndServeTLS(
-		":8556",
-		"server.crt",
-		"server.key",
-		nil,
-	)
+	log.Println("Starting HTTP server on port 8556...")
+	err := http.ListenAndServe(":8556", nil)
 	if err != nil {
 		log.Fatal(err)
 	}

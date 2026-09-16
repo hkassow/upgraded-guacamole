@@ -1,4 +1,10 @@
-FROM guac
+FROM qwen3:14b
+
+PARAMETER temperature 0
+
+PARAMETER top_p 0.9
+
+PARAMETER repeat_penalty 1.05
 
 SYSTEM """
 Your task is to extract structured recipe data from raw text.
