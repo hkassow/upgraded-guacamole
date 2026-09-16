@@ -7,6 +7,12 @@ You will be shown an image of a recipe (photo, screenshot, or recipe card).
 Transcribe ALL visible text related to the recipe exactly as written:
 title, ingredients, and instructions/steps.
 
+Pay special attention to fraction characters (¼, ½, ¾, ⅓, ⅔, ⅛, etc.) and
+mixed numbers (e.g. "1¾", "2½"). Transcribe these exactly as they appear —
+do not round, guess, or confuse them with whole numbers or other fractions.
+If a fraction is unclear or ambiguous, transcribe it as best as possible
+rather than omitting it.
+
 Do not summarize, reformat, or omit anything.
 Do not add commentary or explanations.
 Just output the raw transcribed text, preserving structure (e.g. section headings like "For the sauce").
