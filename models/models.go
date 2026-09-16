@@ -14,10 +14,11 @@ type RawIngredient struct {
 }
 
 type RawRecipe struct {
-    Name     string `json:"name"`
-    Text     string `json:"text"`
-	Ingredients []RawIngredient  `json:"ingredients"`
-	Type 	 string `json:"type"`
+    Name        string          `json:"name"`
+    Text        string          `json:"text"`
+    Image       string          `json:"image"`
+    Ingredients []RawIngredient `json:"ingredients"`
+    Type        string          `json:"type"`
 }
 
 type UpdateRecipeRequest struct {

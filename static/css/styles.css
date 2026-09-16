@@ -539,3 +539,52 @@ textarea {
 .dev {
     display: none;
 }
+
+.recipe-mode-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.mode-tab {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--color-box-border);
+  color: var(--color-text-dark);
+  cursor: pointer;
+  border-radius: 4px 4px 0 0;
+}
+
+.mode-tab.active {
+  background: var(--color-container-bg);
+  border-bottom: 2px solid var(--color-text-dark);
+  font-weight: 600;
+}
+
+.image-drop-zone {
+  border: 2px dashed var(--color-box-border);
+  border-radius: 8px;
+  padding: 24px;
+  text-align: center;
+  cursor: pointer;
+  margin-bottom: 12px;
+  background: var(--color-box-bg);
+  color: var(--color-text-dark);
+}
+
+.image-drop-zone.drag-over {
+  border-color: var(--color-text-dark);
+  background: var(--color-accent-mint);
+}
+
+.image-drop-zone img {
+  max-width: 100%;
+  max-height: 300px;
+  border-radius: 4px;
+}
+
+.ai-timing-note {
+  font-size: 0.9em;
+  color: var(--color-text-dark);
+  opacity: 0.75;
+}

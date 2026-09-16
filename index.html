@@ -106,81 +106,115 @@
 	</div>
 
     <div class="container only-user">
-	<div class="user">
-		<div class='recipe-header'>
-			<button id="addRecipeBtn" onclick="openModal('recipeModal')">Add Recipe</button>
-			<button id="makeGroceryListBtn" onclick="setMakingGroceryList()">Make Grocery List</button>
-			<div></br></div>
-			<button id="submitGroceryListBtn" onclick="submitGroceryList()">Submit Grocery List</button>
+		<div class="user">
+			<div class='recipe-header'>
+				<button id="addRecipeBtn" onclick="openModal('recipeModal')">Add Recipe</button>
+				<button id="makeGroceryListBtn" onclick="setMakingGroceryList()">Make Grocery List</button>
+				<div></br></div>
+				<button id="submitGroceryListBtn" onclick="submitGroceryList()">Submit Grocery List</button>
+			</div>
 		</div>
-	</div>
-	<div class="dev">
-        <p>Click the button to fetch recipes from <code>/recipes</code></p>
-        <button id="recipesBtn" onclick="fetchRecipes()">Get Recipes</button>
-	</div>
-    <div id="recipesResponse"></div>
+		<div class="dev">
+			<p>Click the button to fetch recipes from <code>/recipes</code></p>
+			<button id="recipesBtn" onclick="fetchRecipes()">Get Recipes</button>
+		</div>
+		<div id="recipesResponse"></div>
 
-	<!-- Recipe Add Modal -->
-	<div id="recipeModal" class="modal" onclick="handleModalBackgroundClick(event, this)">
-	  <div class="modal-content">
-	    <span class="close" onclick="closeModal(this.closest('.modal'))">&times;</span>
-	    <h2>Add New Recipe</h2>
-		<div class="recipe-form-container">
-			<button type="button" id="toggleRecipeMode">
-    			Send Recipe to AI to parse
-  			</button>
+		<!-- Recipe Add Modal -->
+		<div id="recipeModal" class="modal" onclick="handleModalBackgroundClick(event, this)">
+			<div class="modal-content">
+				<span class="close" onclick="closeModal(this.closest('.modal'))">&times;</span>
+				<h2>Add New Recipe</h2>
 
-			<!-- AI form -->
-			<form id="aiRecipeForm" onsubmit="submitRecipeForm(event)" hidden>
-				<label for="recipeName">Name:</label>
-				<input type="text" id="recipeName" name="name" required />
+				<div class="recipe-form-container">
 
-				<label for="recipeDescription">Description:</label>
-				<textarea
-				rows="10"
-				id="recipeDescription"
-				name="description"
-				required
-				placeholder="Copy & paste a recipe including the ingredients, and the offline-model will parse it and add the recipe to your profile.
-Please allow an hour or so for it to parse (could take much longer depending on when I turn on the model)."
-				></textarea>
-
-				<button type="submit">Save Recipe</button>
-			</form>
-
-			<!-- Manual form -->
-			<form id="manualRecipeForm" onsubmit="submitManualRecipeForm(event)">
-				<label for="recipeName">Name:</label>
-				<input type="text" id="recipeName" name="name" required />
-				<div class="ingredients-section">
-					<label>Ingredients:</label>
-
-					<div id="ingredientsList"></div>
-
-					<button type="button" id="addIngredientBtn">
-						+ Add Ingredient
-					</button>
+				<!-- Mode selector -->
+				<div class="recipe-mode-tabs" role="tablist">
+					<button type="button" class="mode-tab active" data-mode="text">Paste Text</button>
+					<button type="button" class="mode-tab" data-mode="image">Upload Photo</button>
+					<button type="button" class="mode-tab" data-mode="manual">Manual Entry</button>
 				</div>
 
-				<label for="manualRecipeDescription">Instructions:</label>
-				<textarea
-				rows="10"
-				id="recipeDescription"
-				name="description"
-				required
-				placeholder="Enter the recipe steps here like so:
-Turn on the oven to 200 degrees Celsius
-Make dough
-Put dough into oven
-Etc."
-				></textarea>
+				<!-- AI text form -->
+				<form id="aiRecipeForm" class="recipe-form" onsubmit="submitRecipeForm(event)">
+					<label for="recipeName">Name:</label>
+					<input type="text" id="recipeName" name="name" required />
 
-				<button type="submit">Save Recipe</button>
-			</form>
+					<label for="recipeDescription">Description:</label>
+					<textarea
+					rows="10"
+					id="recipeDescription"
+					name="description"
+					required
+					placeholder="Copy & paste a recipe including the ingredients, and the offline-model will parse it and add the recipe to your profile.
+			Please allow an hour or so for it to parse (could take much longer depending on when I turn on the model)."
+					></textarea>
 
+					<button type="submit">Save Recipe</button>
+				</form>
+
+				<!-- AI image form -->
+				<form id="aiImageForm" class="recipe-form" onsubmit="submitImageRecipeForm(event)" hidden>
+					<label for="imageRecipeName">Name:</label>
+					<input type="text" id="imageRecipeName" name="name" required />
+
+					<label for="recipeImageInput">Recipe photo or screenshot:</label>
+
+					<div id="imageDropZone" class="image-drop-zone" tabindex="0">
+					<div id="imageDropPrompt">
+						Tap to choose a photo
+					</div>
+					<img id="imagePreview" hidden alt="Recipe preview" />
+					</div>
+
+					<input
+					type="file"
+					id="recipeImageInput"
+					name="image"
+					accept="image/*"
+					hidden
+					/>
+
+					<button type="button" id="clearImageBtn" hidden>Remove image</button>
+
+					<p class="ai-timing-note">
+					The offline model will read the recipe from your image. Please allow an hour or so
+					for it to parse (could take longer depending on when the model is running).
+					</p>
+
+					<button type="submit" id="submitImageBtn" disabled>Save Recipe</button>
+				</form>
+
+				<!-- Manual form -->
+				<form id="manualRecipeForm" class="recipe-form" onsubmit="submitManualRecipeForm(event)" hidden>
+					<label for="manualRecipeName">Name:</label>
+					<input type="text" id="manualRecipeName" name="name" required />
+
+					<div class="ingredients-section">
+					<label>Ingredients:</label>
+					<div id="ingredientsList"></div>
+					<button type="button" id="addIngredientBtn">+ Add Ingredient</button>
+					</div>
+
+					<label for="manualRecipeDescription">Instructions:</label>
+					<textarea
+					rows="10"
+					id="manualRecipeDescription"
+					name="description"
+					required
+					placeholder="Enter the recipe steps here like so:
+			Turn on the oven to 200 degrees Celsius
+			Make dough
+			Put dough into oven
+			Etc."
+					></textarea>
+
+					<button type="submit">Save Recipe</button>
+				</form>
+
+				</div>
+			</div>
 		</div>
-	  </div>
-	</div>
     </div>
     <div class="modal" id="groceryListModal" onclick="handleModalBackgroundClick(event, this)">
 		<div class="modal-content">

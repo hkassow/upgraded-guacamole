@@ -3,6 +3,7 @@ package handlers
 import (
     "encoding/json"
     "net/http"
+	"log"
 
 	"go-guacamole/lib"
 	"go-guacamole/models"
@@ -63,12 +64,42 @@ func handlePostRecipe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if rawRecipe.Name == "" || rawRecipe.Text == "" {
-		http.Error(w, "Missing fields", http.StatusBadRequest)
+	if rawRecipe.Name == "" {
+    http.Error(w, "Recipe name is required", http.StatusBadRequest)
+    return
+}
+
+	// check to ensure that for each submission type the required fields are there
+	switch rawRecipe.Type {
+	case "text":
+		if rawRecipe.Text == "" {
+			http.Error(w, "Recipe text is required", http.StatusBadRequest)
+			return
+		}
+	case "image":
+		if rawRecipe.Image == "" {
+			http.Error(w, "Recipe image is required", http.StatusBadRequest)
+			return
+		}
+	case "manual":
+		if rawRecipe.Text == "" {
+			http.Error(w, "Recipe instructions are required", http.StatusBadRequest)
+			return
+		}
+		if len(rawRecipe.Ingredients) == 0 {
+			http.Error(w, "At least one ingredient is required", http.StatusBadRequest)
+			return
+		}
+	default:
+		http.Error(w, "Invalid recipe type", http.StatusBadRequest)
 		return
 	}
 	
 	userID := lib.GetUserID(r, store)
+	if userID == 0 {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 	if rawRecipe.Type == "manual" {
 		ctx := r.Context()	
 		err := lib.HandleManualRecipePost(ctx, userID, rawRecipe)
@@ -83,7 +114,7 @@ func handlePostRecipe(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{
     	    "message": "Recipe created",
     	})
-	} else {
+	} else if rawRecipe.Type == "text" {
 	
 		lib.RecipeQueue <- models.RecipeJob{
 			Name: rawRecipe.Name,
@@ -93,6 +124,14 @@ func handlePostRecipe(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(map[string]string{
     	    "message": "Recipe queued to be parsed",
+    	})
+	} else if rawRecipe.Type == "image" {
+		log.Printf("Received image recipe submission - Name: %s, User: %s, Image size: %d bytes\n",
+        rawRecipe.Name, userID, len(rawRecipe.Image))
+
+    	w.WriteHeader(http.StatusCreated)
+    	json.NewEncoder(w).Encode(map[string]string{
+        	"message": "Recipe image received",
     	})
 	}
 }

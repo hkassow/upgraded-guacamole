@@ -31,6 +31,7 @@ var locationFilter = false;
 var categoryFilter = false;
 var timer = null;
 var user = null;
+var selectedImageFile = null;
 
 // -------- util code --------
 async function makeRequest() {
@@ -375,10 +376,11 @@ async function fetchIngredients() {
 
 async function submitRecipeForm(event) {
     event.preventDefault();
-    const recipeForm = document.getElementById('recipeForm');
+    const recipeForm = document.getElementById('aiRecipeForm');
     const newRecipe = {
-        name: recipeForm.recipeName.value.trim(),
-	    text: recipeForm.recipeDescription.value.trim()    
+        name: document.getElementById('recipeName').value.trim(),
+        text: document.getElementById('recipeDescription').value.trim(),
+        type: 'text'    
     };
 
     try {
@@ -404,8 +406,8 @@ async function submitManualRecipeForm(event) {
     event.preventDefault();
     const recipeForm = document.getElementById('manualRecipeForm');
     const newRecipe = {
-        name: recipeForm.recipeName.value.trim(),
-	    text: recipeForm.recipeDescription.value.trim(),
+        name: document.getElementById('manualRecipeName').value.trim(),
+        text: document.getElementById('manualRecipeDescription').value.trim(),
         ingredients: [],
         type: 'manual'
     };
@@ -437,6 +439,73 @@ async function submitManualRecipeForm(event) {
         recipeForm.reset();
 
 	    showToast('Recipe added!');
+    } catch (err) {
+        console.error('Error saving recipe:', err);
+    }
+}
+
+function setImage(file) {
+    selectedImageFile = file;
+    const preview = document.getElementById('imagePreview');
+    const dropPrompt = document.getElementById('imageDropPrompt');
+    const clearBtn = document.getElementById('clearImageBtn');
+    const submitImageBtn = document.getElementById('submitImageBtn');
+
+    const reader = new FileReader();
+    reader.onload = () => {
+        preview.src = reader.result;
+        preview.hidden = false;
+        dropPrompt.hidden = true;
+        clearBtn.hidden = false;
+        submitImageBtn.disabled = false;
+    };
+    reader.readAsDataURL(file);
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      // strip the "data:image/png;base64," prefix — your Go server expects raw base64
+      const base64 = reader.result.split(',')[1];
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function submitImageRecipeForm(event) {
+  event.preventDefault();
+  if (!selectedImageFile) return;
+
+  const recipeForm = document.getElementById('aiImageForm');
+
+    const name = document.getElementById('imageRecipeName').value.trim();
+    const base64Image = await fileToBase64(selectedImageFile);
+
+    const newRecipe = {
+        name: name,
+        image: base64Image,
+        type: 'image'
+    };
+
+    try {
+        console.log('Submitting new recipe image:', name);
+        const response = await fetch('/recipes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newRecipe),
+        });
+
+        if (!response.ok) throw new Error('Failed to save recipe');
+
+        closeModal('recipeModal');
+        recipeForm.reset();
+        const clearBtn = document.getElementById('clearImageBtn');
+        clearBtn.click(); // reset the drop zone preview state too
+
+        showToast('Recipe queued to be parsed, please check back later');
     } catch (err) {
         console.error('Error saving recipe:', err);
     }
@@ -977,23 +1046,97 @@ function addEventListenerToMenu() {
 }
 
 function addEventListenerToRecipeAdd() {
-    const toggleRecipeMode = document.getElementById("toggleRecipeMode");
-    const aiRecipeForm = document.getElementById("aiRecipeForm");
-    const manualRecipeForm = document.getElementById("manualRecipeForm");
-    const addIngredientBtn = document.getElementById("addIngredientBtn");
+    // manual add recipe setup
     addIngredientBtn.addEventListener("click", addIngredient);
-
     addIngredient();
 
-    toggleRecipeMode.addEventListener("click", () => {
-        const showingAI = !aiRecipeForm.hidden;
+    const modeForms = {
+        text: document.getElementById('aiRecipeForm'),
+        image: document.getElementById('aiImageForm'),
+        manual: document.getElementById('manualRecipeForm'),
+    };
 
-        aiRecipeForm.hidden = showingAI;
-        manualRecipeForm.hidden = !showingAI;
+    document.querySelectorAll('.mode-tab').forEach(tab => {
+        tab.addEventListener('click', () => switchRecipeMode(tab.dataset.mode));
+    });
 
-        toggleRecipeMode.textContent = showingAI
-            ? "Use AI Fill"
-            : "Enter Recipe Manually";
+    // --- Image handling ---
+
+    const dropZone = document.getElementById('imageDropZone');
+    const fileInput = document.getElementById('recipeImageInput');
+    const preview = document.getElementById('imagePreview');
+    const dropPrompt = document.getElementById('imageDropPrompt');
+    const clearBtn = document.getElementById('clearImageBtn');
+    const submitImageBtn = document.getElementById('submitImageBtn');
+
+    function switchRecipeMode(mode) {
+        Object.entries(modeForms).forEach(([key, form]) => {
+            form.hidden = key !== mode;
+        });
+        document.querySelectorAll('.mode-tab').forEach(tab => {
+            tab.classList.toggle('active', tab.dataset.mode === mode);
+        });
+
+        if (mode === 'image') {
+            dropZone.focus(); // so paste events land here
+        }
+    }
+
+
+    dropZone.addEventListener('click', () => fileInput.click());
+
+    dropZone.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') fileInput.click();
+    });
+
+    fileInput.addEventListener('change', () => {
+        if (fileInput.files[0]) setImage(fileInput.files[0]);
+    });
+
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.classList.add('drag-over');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+        dropZone.classList.remove('drag-over');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('drag-over');
+        const file = e.dataTransfer.files[0];
+        if (file && file.type.startsWith('image/')) setImage(file);
+    });
+
+    // Paste support (e.g. Ctrl+V a screenshot)
+    /*dropZone.addEventListener('paste', (e) => {
+        console.log('paste fired', e.clipboardData?.items);
+
+        if (!e.clipboardData) return;
+        const item = [...e.clipboardData.items].find(i => i.type.startsWith('image/'));
+        if (item) setImage(item.getAsFile());
+    });*/
+    document.addEventListener('paste', (e) => {
+        if (document.getElementById('aiImageForm').hidden) return;
+        if (!e.clipboardData) return;
+
+        const item = [...e.clipboardData.items].find(i => i.type.startsWith('image/'));
+        if (item) {
+            e.preventDefault();
+            setImage(item.getAsFile());
+        }
+    });
+
+
+    clearBtn.addEventListener('click', () => {
+        selectedImageFile = null;
+        fileInput.value = '';
+        preview.src = '';
+        preview.hidden = true;
+        dropPrompt.hidden = false;
+        clearBtn.hidden = true;
+        submitImageBtn.disabled = true;
     });
 }
 

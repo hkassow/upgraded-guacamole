@@ -15,9 +15,11 @@ upgraded-guacamole.com
 docker exec -it guac psql -U postgres -d guac
 
 ## project todo 
-1. vision model setup
-2. get/checkin image for testing vision model
-3. add backend tests
+-. vision model setup
+-. get/checkin image for testing vision model
+-. fix editing other peoples recipes
+-. fix grocery list adding to just do dairy.meat.dry.produce 
+-. add backend tests
     - create recipe manual
     - create recipe ai fill (mock ai response)
     - update recipe
@@ -26,12 +28,12 @@ docker exec -it guac psql -U postgres -d guac
     - add follower
     - remove follower (when added)
 
-4. filter recipe types
+-. filter recipe types
     - your recipes
     - recipes of people you follow
     - show all recipes
 
-5. custom logging function
+-. custom logging function
     - maintains two logs
         -> all logs
         -> error logs
