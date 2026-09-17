@@ -1,0 +1,2 @@
+ALTER TABLE recipe_jobs ADD COLUMN image TEXT;
+ALTER TABLE recipe_jobs ADD COLUMN type VARCHAR(20) NOT NULL DEFAULT 'text';

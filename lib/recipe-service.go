@@ -295,13 +295,13 @@ func DeleteRecipe(ctx context.Context, recipeID int, userID int) error {
     return nil
 }
 
-func CreateRecipeJob(ctx context.Context, name, text string, user_id int) (int, error) {
+func CreateRecipeJob(ctx context.Context, job models.RecipeJob) (int, error) {
     var jobID int
     err := db.Pool.QueryRow(ctx,
-        `INSERT INTO recipe_jobs (title, text, parsed, user_id)
-         VALUES ($1, $2, FALSE, $3)
+        `INSERT INTO recipe_jobs (title, text, image, type, parsed, user_id)
+         VALUES ($1, $2, $3, $4, FALSE, $5)
          RETURNING id`,
-        name, text, user_id,
+        job.Name, job.Text, job.Image, job.Type, job.User_id,
     ).Scan(&jobID)
 
     if err != nil {
@@ -329,7 +329,7 @@ func MarkRecipeJobParsed(ctx context.Context, jobID int) error {
 
 func LoadUnparsedRecipeJobs(ctx context.Context) (error) {
     rows, err := db.Pool.Query(ctx,
-        `SELECT id, title, text, user_id 
+        `SELECT id, title, text, image, type, user_id 
          FROM recipe_jobs 
          WHERE parsed = FALSE`,
     )
@@ -342,7 +342,7 @@ func LoadUnparsedRecipeJobs(ctx context.Context) (error) {
 
     for rows.Next() {
         var job models.RecipeJob
-        if err := rows.Scan(&job.ID, &job.Name, &job.Text, &job.User_id); err != nil {
+	if err := rows.Scan(&job.ID, &job.Name, &job.Text, &job.Image, &job.Type, &job.User_id); err != nil {
             return err
         }
 

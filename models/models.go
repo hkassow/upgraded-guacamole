@@ -1,9 +1,11 @@
 package models
 
 type RecipeJob struct {
-	ID int
-	Name string
-	Text string
+    ID int
+    Name string
+    Text string
+    Image   string
+    Type    string
     User_id int
 }
 

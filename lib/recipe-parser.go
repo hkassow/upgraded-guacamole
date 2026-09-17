@@ -25,6 +25,10 @@ type RecipeParsed struct {
     Ingredients []Ingredient `json:"ingredients"`
 }
 
+type ImageRequest struct {
+    Image string `json:"image"`
+}
+
 type Request struct {
     Prompt string `json:"prompt"`
 }
@@ -42,24 +46,11 @@ func cleanupJSON(raw string) string {
 
     return strings.TrimSpace(raw)
 }
-
-func ParseRecipeCall(recipeText string) (*RecipeParsed, error) {
+func callParserEndpoint(path string, body []byte) (*RecipeParsed, error) {
 	apiKey, err := LoadSecret("INTERNAL_API_KEY")
-    if err != nil {
-        log.Fatal(err)
-    }
-	gouda_ip, err := LoadSecret("GOUDA_IP")
 	if err != nil {
-	    log.Fatal(err)
+		log.Fatal(err)
 	}
-
-	body, _ := json.Marshal(Request{
-		Prompt: recipeText,
-	})
-	
-	path := fmt.Sprintf("http://%v:8556/parse-recipe", gouda_ip)
-	
-	// setup http client
 
 	client := &http.Client{
 		Timeout: 240000 * time.Second,
@@ -69,41 +60,67 @@ func ParseRecipeCall(recipeText string) (*RecipeParsed, error) {
 			},
 		},
 	}
-	
+
 	parsed := &RecipeParsed{}
 
 	req, err := http.NewRequest("POST", path, bytes.NewBuffer(body))
 	if err != nil {
 		return parsed, err
 	}
-	
+
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-API-Key", apiKey) // internal auth header
-	
+	req.Header.Set("X-API-Key", apiKey)
+
 	resp, err := client.Do(req)
-
 	if err != nil {
-	    return parsed, fmt.Errorf("ollama request failed: %w", err)
+		return parsed, fmt.Errorf("ollama request failed: %w", err)
 	}
-
 	defer resp.Body.Close()
-
-
 
 	data, _ := io.ReadAll(resp.Body)
 
-	
-    	var wrapper ModelResponse
-    	if err := json.Unmarshal(data, &wrapper); err != nil {
-    	    return parsed, fmt.Errorf("failed to decode wrapper: %w", err)
-    	}
+	var wrapper ModelResponse
+	if err := json.Unmarshal(data, &wrapper); err != nil {
+		return parsed, fmt.Errorf("failed to decode wrapper: %w", err)
+	}
 
-    	clean := cleanupJSON(wrapper.Result)
+	clean := cleanupJSON(wrapper.Result)
 
-    	if err := json.Unmarshal([]byte(clean), &parsed); err != nil {
-    	    return parsed, fmt.Errorf("failed to parse recipe json: %w", err)
-    	}
+	if err := json.Unmarshal([]byte(clean), &parsed); err != nil {
+		return parsed, fmt.Errorf("failed to parse recipe json: %w", err)
+	}
+
 	return parsed, nil
+}
+
+func ParseRecipeCall(recipeText string) (*RecipeParsed, error) {
+	gouda_ip, err := LoadSecret("GOUDA_IP")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	body, _ := json.Marshal(Request{
+		Prompt: recipeText,
+	})
+
+	path := fmt.Sprintf("http://%v:8556/parse-recipe", gouda_ip)
+
+	return callParserEndpoint(path, body)
+}
+
+func ParseRecipeImageCall(imageBase64 string) (*RecipeParsed, error) {
+	gouda_ip, err := LoadSecret("GOUDA_IP")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	body, _ := json.Marshal(ImageRequest{
+		Image: imageBase64,
+	})
+
+	path := fmt.Sprintf("http://%v:8556/parse-recipe-image", gouda_ip)
+
+	return callParserEndpoint(path, body)
 }
 
 var RecipeQueue = make(chan models.RecipeJob, 100)
@@ -111,33 +128,42 @@ var RecipeQueue = make(chan models.RecipeJob, 100)
 func StartRecipeWorker() {
     go func() {
         for job := range RecipeQueue {
-			log.Println("Processing recipe:", job.Name)
+            log.Println("Processing recipe:", job.Name)
 
-			ctx := context.Background()
+            ctx := context.Background()
 
-			jobID := job.ID
-			if jobID == 0 {
-				var err error
-				jobID, err = CreateRecipeJob(ctx, job.Name, job.Text, job.User_id)
-				if err != nil {
-					continue
-				}
-			}
+            jobID := job.ID
+            if jobID == 0 {
+                var err error
+                jobID, err = CreateRecipeJob(ctx, job)
+                if err != nil {
+                    continue
+                }
+            }
 
-			parsed, err := ParseRecipeCall(job.Text)
-			if err != nil {
-				log.Println("Error parsing recipe:", err)
-				continue
-			}
+            var parsed *RecipeParsed
+            var err error
 
-			if err := SaveParsedRecipe(context.Background(), job.Name, job.User_id, parsed); err != nil {
-				log.Println("Error saving recipe:", err)
-				continue
-			}
+            switch job.Type {
+            case "image":
+                parsed, err = ParseRecipeImageCall(job.Image)
+            default: // "text"
+                parsed, err = ParseRecipeCall(job.Text)
+            }
 
-			_ = MarkRecipeJobParsed(ctx, jobID)
+            if err != nil {
+                log.Println("Error parsing recipe:", err)
+                continue
+            }
 
-			log.Println("Recipe saved successfully:", job.Name)
+            if err := SaveParsedRecipe(context.Background(), job.Name, job.User_id, parsed); err != nil {
+                log.Println("Error saving recipe:", err)
+                continue
+            }
+
+            _ = MarkRecipeJobParsed(ctx, jobID)
+
+            log.Println("Recipe saved successfully:", job.Name)
         }
     }()
 }

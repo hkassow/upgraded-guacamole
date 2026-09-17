@@ -100,6 +100,9 @@ func handlePostRecipe(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
+	log.Printf("Incoming /recipes request - Name: %s, User: %s, Type: %s, Method: %s\n", rawRecipe.Name, userID, rawRecipe.Type, r.ContentLength)
+
+
 	if rawRecipe.Type == "manual" {
 		ctx := r.Context()	
 		err := lib.HandleManualRecipePost(ctx, userID, rawRecipe)
@@ -112,10 +115,10 @@ func handlePostRecipe(w http.ResponseWriter, r *http.Request) {
 
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(map[string]string{
-    	    "message": "Recipe created",
-    	})
+    	    		"message": "Recipe created",
+    		})
 	} else if rawRecipe.Type == "text" {
-	
+
 		lib.RecipeQueue <- models.RecipeJob{
 			Name: rawRecipe.Name,
 			Text: rawRecipe.Text,
@@ -123,16 +126,20 @@ func handlePostRecipe(w http.ResponseWriter, r *http.Request) {
 		}
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(map[string]string{
-    	    "message": "Recipe queued to be parsed",
-    	})
+    	    		"message": "Recipe queued to be parsed",
+    		})
 	} else if rawRecipe.Type == "image" {
-		log.Printf("Received image recipe submission - Name: %s, User: %s, Image size: %d bytes\n",
-        rawRecipe.Name, userID, len(rawRecipe.Image))
+		lib.RecipeQueue <- models.RecipeJob{
+    	    		Name:    rawRecipe.Name,
+        		Image:   rawRecipe.Image,
+        		Type:    "image",
+        		User_id: userID,
+    		}
+    		w.WriteHeader(http.StatusCreated)
+    		json.NewEncoder(w).Encode(map[string]string{
+        		"message": "Recipe image queued to be parsed",
+    		})
 
-    	w.WriteHeader(http.StatusCreated)
-    	json.NewEncoder(w).Encode(map[string]string{
-        	"message": "Recipe image received",
-    	})
 	}
 }
 func handlePatchRecipe(w http.ResponseWriter, r *http.Request) {
