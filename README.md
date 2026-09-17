@@ -1,9 +1,6 @@
 ## upgraded-guacamole
-
-# Run locally
-go run .
-
-# Run using docker
+A simple recipe parser for storing recipes, uses vanilla go backend and vanilla javascript backend. With Ollama running on a seperate computer/server for parsing text/images and converting to recipes.
+# Run locally using docker
 docker compose up --build
 
 docker compose down
@@ -15,10 +12,10 @@ upgraded-guacamole.com
 docker exec -it guac psql -U postgres -d guac
 
 ## project todo 
--. vision model setup
--. get/checkin image for testing vision model
+-. allow uploading multiple pictures for a single recipe
 -. fix editing other peoples recipes
--. fix grocery list adding to just do dairy.meat.dry.produce 
+-. fix grocery list adding to just do dairy.meat.dry.produce
+-. look into using runpod to run my qwen models
 -. add backend tests
     - create recipe manual
     - create recipe ai fill (mock ai response)
