@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"fmt"
+    "strings"
 	"net/http"
 )
 
@@ -14,7 +15,7 @@ type ParseRequest struct {
 }
 
 type ParseImageRequest struct {
-	Image string `json:"image"` // base64-encoded image, no data: prefix
+	Images []string `json:"images"`
 }
 
 type OllamaRequest struct {
@@ -141,16 +142,35 @@ func parseImageHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Step 1: vision model transcribes the image to raw text
-	rawText, err := callOllama("recipe-vision", "Transcribe the recipe in this image.", []string{req.Image})
-	if err != nil {
-		http.Error(w, "Failed to contact vision model: "+err.Error(), 500)
-		return
-	}
-	log.Printf("Transcribed text: %s\n", rawText)
+    if len(req.Images) == 0 {
+        http.Error(w,"No images provided", http.StatusBadRequest)
+        return
+    }
 
-	// Step 2: existing text parser turns raw text into structured JSON
-	result, err := callOllama("recipe-parser", rawText, nil)
+    var transcriptions []string
+
+    for i, img := range req.Images {
+        log.Printf("Transcribing image %d of %d\n", i+1, len(req.Images))
+
+        text, err := callOllama(
+            "recipe-vision",
+            "Transcribe all visible recipe text in this image (title, ingredients, steps — whatever is present).",
+            []string{img},
+        )
+        if err != nil {
+            http.Error(w, fmt.Sprintf("Failed to process image %d: %s", i+1, err.Error()), 500)
+            return
+        }
+
+        log.Printf("Image %d transcription: %s\n", i+1, text)
+        transcriptions = append(transcriptions, text)
+    }
+
+    // Combine all transcriptions into one block of raw text for the parser
+    combinedText := strings.Join(transcriptions, "\n\n---\n\n")
+
+
+	result, err := callOllama("recipe-parser", combinedText, nil)
 	if err != nil {
 		http.Error(w, "Failed to contact parser model: "+err.Error(), 500)
 		return

@@ -588,3 +588,41 @@ textarea {
   color: var(--color-text-dark);
   opacity: 0.75;
 }
+
+.image-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.image-preview-item {
+  position: relative;
+}
+
+.image-preview-item img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.remove-image-btn {
+  background: var(--color-box-bg);
+  color: var(--color-text-dark);
+  border: 1px solid var(--color-box-border);
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  line-height: 1;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.remove-image-btn:hover {
+  background: var(--color-accent-pink);
+}

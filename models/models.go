@@ -4,7 +4,7 @@ type RecipeJob struct {
     ID int
     Name string
     Text string
-    Image   string
+    Images   []string
     Type    string
     User_id int
 }
@@ -18,7 +18,7 @@ type RawIngredient struct {
 type RawRecipe struct {
     Name        string          `json:"name"`
     Text        string          `json:"text"`
-    Image       string          `json:"image"`
+    Images      []string        `json:"images"`
     Ingredients []RawIngredient `json:"ingredients"`
     Type        string          `json:"type"`
 }

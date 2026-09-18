@@ -31,7 +31,7 @@ var locationFilter = false;
 var categoryFilter = false;
 var timer = null;
 var user = null;
-var selectedImageFile = null;
+var selectedImageFiles = [];
 
 // -------- util code --------
 async function makeRequest() {
@@ -444,49 +444,75 @@ async function submitManualRecipeForm(event) {
     }
 }
 
-function setImage(file) {
-    selectedImageFile = file;
-    const preview = document.getElementById('imagePreview');
+function setImages(files) {
+    selectedImageFiles.push(...files);
+    renderPreviews();
+}
+
+function renderPreviews() {
+    const grid = document.getElementById('imagePreviewGrid');
     const dropPrompt = document.getElementById('imageDropPrompt');
     const clearBtn = document.getElementById('clearImageBtn');
     const submitImageBtn = document.getElementById('submitImageBtn');
+    grid.innerHTML = '';
+    dropPrompt.hidden = selectedImageFiles.length > 0;
+    submitImageBtn.disabled = selectedImageFiles.length === 0;
+    clearBtn.hidden = selectedImageFiles.length === 0;
 
-    const reader = new FileReader();
-    reader.onload = () => {
-        preview.src = reader.result;
-        preview.hidden = false;
-        dropPrompt.hidden = true;
-        clearBtn.hidden = false;
-        submitImageBtn.disabled = false;
-    };
-    reader.readAsDataURL(file);
+    selectedImageFiles.forEach((file, index) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'image-preview-item';
+
+
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.textContent = '×';
+            removeBtn.className = 'remove-image-btn';
+            removeBtn.onclick = () => {
+                selectedImageFiles.splice(index, 1);
+                renderPreviews();
+            };
+            wrapper.appendChild(removeBtn);
+
+            const img = document.createElement('img');
+            img.src = reader.result;
+            wrapper.appendChild(img);
+
+            grid.appendChild(wrapper);
+        };
+        reader.readAsDataURL(file);
+    });
 }
 
 function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      // strip the "data:image/png;base64," prefix — your Go server expects raw base64
-      const base64 = reader.result.split(',')[1];
-      resolve(base64);
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+        // strip the "data:image/png;base64," prefix — your Go server expects raw base64
+        const base64 = reader.result.split(',')[1];
+        resolve(base64);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
 }
 
 async function submitImageRecipeForm(event) {
-  event.preventDefault();
-  if (!selectedImageFile) return;
+    event.preventDefault();
+    if (!selectedImageFiles) return;
 
-  const recipeForm = document.getElementById('aiImageForm');
+    const recipeForm = document.getElementById('aiImageForm');
 
     const name = document.getElementById('imageRecipeName').value.trim();
-    const base64Image = await fileToBase64(selectedImageFile);
+    const base64Images = await Promise.all(
+        selectedImageFiles.map(file => fileToBase64(file))
+    );
 
     const newRecipe = {
         name: name,
-        image: base64Image,
+        images: base64Images,
         type: 'image'
     };
 
@@ -501,9 +527,9 @@ async function submitImageRecipeForm(event) {
         if (!response.ok) throw new Error('Failed to save recipe');
 
         closeModal('recipeModal');
-        recipeForm.reset();
-        const clearBtn = document.getElementById('clearImageBtn');
-        clearBtn.click(); // reset the drop zone preview state too
+        document.getElementById('aiImageForm').reset();
+        selectedImageFiles = [];
+        renderPreviews();
 
         showToast('Recipe queued to be parsed, please check back later');
     } catch (err) {
@@ -1069,13 +1095,34 @@ function addEventListenerToRecipeAdd() {
     const clearBtn = document.getElementById('clearImageBtn');
     const submitImageBtn = document.getElementById('submitImageBtn');
 
+    const nameFieldIds = {
+        text: 'recipeName',
+        image: 'imageRecipeName',
+        manual: 'manualRecipeName',
+    };
+
     function switchRecipeMode(mode) {
+        // keep current name(title)
+        const currentModeEntry = Object.entries(modeForms).find(([, form]) => !form.hidden);
+        let carriedName = '';
+        if (currentModeEntry) {
+            const [currentMode] = currentModeEntry;
+            const currentNameField = document.getElementById(nameFieldIds[currentMode]);
+            if (currentNameField) carriedName = currentNameField.value.trim();
+        }
+
         Object.entries(modeForms).forEach(([key, form]) => {
             form.hidden = key !== mode;
         });
+
         document.querySelectorAll('.mode-tab').forEach(tab => {
             tab.classList.toggle('active', tab.dataset.mode === mode);
         });
+
+        if (carriedName) {
+            const newNameField = document.getElementById(nameFieldIds[mode]);
+            if (newNameField) newNameField.value = carriedName;
+        }
 
         if (mode === 'image') {
             dropZone.focus(); // so paste events land here
@@ -1090,8 +1137,10 @@ function addEventListenerToRecipeAdd() {
     });
 
     fileInput.addEventListener('change', () => {
-        if (fileInput.files[0]) setImage(fileInput.files[0]);
+        if (fileInput.files.length) setImages([...fileInput.files]);
+        fileInput.value = ''; // reset so selecting the same file again still fires 'change'
     });
+
 
     dropZone.addEventListener('dragover', (e) => {
         e.preventDefault();
@@ -1105,38 +1154,28 @@ function addEventListenerToRecipeAdd() {
     dropZone.addEventListener('drop', (e) => {
         e.preventDefault();
         dropZone.classList.remove('drag-over');
-        const file = e.dataTransfer.files[0];
-        if (file && file.type.startsWith('image/')) setImage(file);
+        const files = [...e.dataTransfer.files].filter(f => f.type.startsWith('image/'));
+        if (files.length) setImages(files);
     });
 
-    // Paste support (e.g. Ctrl+V a screenshot)
-    /*dropZone.addEventListener('paste', (e) => {
-        console.log('paste fired', e.clipboardData?.items);
-
-        if (!e.clipboardData) return;
-        const item = [...e.clipboardData.items].find(i => i.type.startsWith('image/'));
-        if (item) setImage(item.getAsFile());
-    });*/
     document.addEventListener('paste', (e) => {
         if (document.getElementById('aiImageForm').hidden) return;
         if (!e.clipboardData) return;
 
-        const item = [...e.clipboardData.items].find(i => i.type.startsWith('image/'));
-        if (item) {
+        const imageFiles = [...e.clipboardData.items]
+            .filter(i => i.type.startsWith('image/'))
+            .map(i => i.getAsFile())
+            .filter(Boolean);
+        if (imageFiles.length) {
             e.preventDefault();
-            setImage(item.getAsFile());
+            setImages(imageFiles);
         }
     });
 
 
     clearBtn.addEventListener('click', () => {
-        selectedImageFile = null;
-        fileInput.value = '';
-        preview.src = '';
-        preview.hidden = true;
-        dropPrompt.hidden = false;
-        clearBtn.hidden = true;
-        submitImageBtn.disabled = true;
+        selectedImageFiles = [];
+        renderPreviews();
     });
 }
 

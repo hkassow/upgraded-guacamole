@@ -26,7 +26,7 @@ type RecipeParsed struct {
 }
 
 type ImageRequest struct {
-    Image string `json:"image"`
+    Images []string `json:"images"`
 }
 
 type Request struct {
@@ -115,7 +115,7 @@ func ParseRecipeImageCall(imageBase64 string) (*RecipeParsed, error) {
 	}
 
 	body, _ := json.Marshal(ImageRequest{
-		Image: imageBase64,
+		Images: images,
 	})
 
 	path := fmt.Sprintf("http://%v:8556/parse-recipe-image", gouda_ip)
@@ -146,7 +146,7 @@ func StartRecipeWorker() {
 
             switch job.Type {
             case "image":
-                parsed, err = ParseRecipeImageCall(job.Image)
+                parsed, err = ParseRecipeImageCall(job.Images)
             default: // "text"
                 parsed, err = ParseRecipeCall(job.Text)
             }

@@ -162,21 +162,22 @@ Please allow an hour or so for it to parse (could take much longer depending on 
 					<label for="recipeImageInput">Recipe photo or screenshot:</label>
 
 					<div id="imageDropZone" class="image-drop-zone" tabindex="0">
-					<div id="imageDropPrompt">
-						Tap to choose a photo
-					</div>
-					<img id="imagePreview" hidden alt="Recipe preview" />
+						<div id="imageDropPrompt">
+							Tap to choose photos
+						</div>
+						<div id="imagePreviewGrid" class="image-preview-grid" hidden alt="Recipe preview"></div>
 					</div>
 
 					<input
-					type="file"
-					id="recipeImageInput"
-					name="image"
-					accept="image/*"
-					hidden
+						type="file"
+						id="recipeImageInput"
+						name="image"
+						accept="image/*"
+						multiple
+						hidden
 					/>
 
-					<button type="button" id="clearImageBtn" hidden>Remove image</button>
+					<button type="button" id="clearImageBtn" hidden>Clear all images</button>
 
 					<p class="ai-timing-note">
 					The offline model will read the recipe from your image. Please allow an hour or so

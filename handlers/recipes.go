@@ -77,8 +77,8 @@ func handlePostRecipe(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case "image":
-		if rawRecipe.Image == "" {
-			http.Error(w, "Recipe image is required", http.StatusBadRequest)
+		if len(rawRecipe.Images) == 0 {
+			http.Error(w, "At least one recipe image is required", http.StatusBadRequest)
 			return
 		}
 	case "manual":
@@ -130,8 +130,8 @@ func handlePostRecipe(w http.ResponseWriter, r *http.Request) {
     		})
 	} else if rawRecipe.Type == "image" {
 		lib.RecipeQueue <- models.RecipeJob{
-    	    		Name:    rawRecipe.Name,
-        		Image:   rawRecipe.Image,
+    	    	Name:    rawRecipe.Name,
+        		Images:   rawRecipe.Images,
         		Type:    "image",
         		User_id: userID,
     		}

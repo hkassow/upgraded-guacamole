@@ -1,0 +1,2 @@
+ALTER TABLE recipe_jobs DROP COLUMN IF EXISTS image;
+ALTER TABLE recipe_jobs ADD COLUMN images JSONB;
