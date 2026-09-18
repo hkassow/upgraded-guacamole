@@ -135,6 +135,19 @@ Return **only valid JSON**, using the following schema:
      * First mention: {"name": "butter", "amount": "2 tbsp", "preparation_notes": "for sauce"}
      * Second mention: {"name": "butter", "amount": "1/4 cup", "preparation_notes": "for dough"}
 
+7. Handle ingredient alternatives (the word "or" between ingredient options):
+   - If a single ingredient line offers alternatives (e.g. "pecans or walnuts",
+     "butter or margarine", "chicken stock or vegetable stock"), this is ONE
+     ingredient entry, NOT two.
+   - Use the first-listed option as the `"name"`.
+   - Add the alternative to `"preparation_notes"` in the form: "or [alternative]"
+   - Do NOT create a separate ingredient entry for the alternative option.
+   - Examples:
+     * "1 cup pecans or walnuts, chopped" →
+       {"name": "pecans", "amount": "1 cup", "preparation_notes": "chopped, or walnuts"}
+     * "2 tbsp butter or margarine" →
+       {"name": "butter", "amount": "2 tbsp", "preparation_notes": "or margarine"}
+
 ---
 
 ### OUTPUT RULES
