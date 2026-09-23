@@ -272,7 +272,7 @@ type diChatResponse struct {
 type Ingredient struct {
     Name   string `json:"name"`
     Amount string `json:"amount"`
-	AltAmount string `json:"alt_amount"`
+    AltAmount string `json:"alt_amount"`
     PreparationNotes string `json:"preparation_notes"`
 }
 
@@ -470,7 +470,7 @@ func logSchemaDrift(raw string) {
 		if err := json.Unmarshal(rawIngredients, &ingredients); err == nil {
 			for i, ing := range ingredients {
 				for key := range ing {
-					if key != "name" && key != "amount" && key != "preparation_notes" {
+					if key != "name" && key != "amount" && key != "preparation_notes"  && key != "alt_amount" {
 						log.Printf("deepinfra: unexpected field %q in ingredients[%d]", key, i)
 					}
 				}

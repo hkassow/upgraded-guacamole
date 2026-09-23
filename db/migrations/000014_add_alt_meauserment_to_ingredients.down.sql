@@ -1,2 +1,1 @@
-ALTER TABLE recipe_ingredient
-ADD COLUMN alt_amount TEXT
+ALTER TABLE recipe_ingredient DROP COLUMN IF EXISTS alt_amount
