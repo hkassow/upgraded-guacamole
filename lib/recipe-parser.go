@@ -18,10 +18,10 @@ import (
 const (
 	deepInfraChatURL = "https://api.deepinfra.com/v1/openai/chat/completions"
  
-	deepInfraTextModel = "Qwen3-235B-A22B-Instruct-2507" // .09 in .55 out
+	deepInfraTextModel = "Qwen/Qwen3-235B-A22B-Instruct-2507" // .09 in .55 out
 	//deepInfraTextModel = "Qwen/Qwen3-32B"				 // .08 in .28 out
  
-	deepInfraVisionModel = "Qwen3-VL-235B-A22B-Instruct" // .20 in .88 out
+	deepInfraVisionModel = "Qwen/Qwen3-VL-235B-A22B-Instruct" // .20 in .88 out
 	//deepInfraVisionModel = "Qwen3-VL-30B-A3B-Instruct" // .15 in .60 out
 )
 const recipeTextSystemPrompt = `
