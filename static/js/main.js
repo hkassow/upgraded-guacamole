@@ -151,30 +151,27 @@ function submitGroceryList() {
 
 	recipe_ids.forEach(id => {
 	    const recipe = global_recipes[id];
-            if (!recipe || !recipe.ingredients) return;
+        if (!recipe || !recipe.ingredients) return;
 	    recipe.ingredients.forEach(ri => {
-            	const fullIngredient = global_ingredients[ri.ingredient_id];
-            	if (fullIngredient) {
-		    loc = fullIngredient.location;
-	            cat = fullIngredient.category || 'unspecified';
-		    if (!(loc in ingredient_collection)) {
-		    	ingredient_collection[loc] = {}
-		    } 
+            const fullIngredient = global_ingredients[ri.ingredient_id];
+            if (fullIngredient) {
+		        loc = fullIngredient.location;
+                // ignore category for now only group by dry,dairy,meat,produce 
+	            //cat = fullIngredient.category || 'unspecified';
+		        if (!(loc in ingredient_collection)) {
+		    	    ingredient_collection[loc] = {}
+		        } 
 	            let ing_string = ' - ' + fullIngredient.name;
 	            ing_string += ri.amount? `, ${ri.amount}` : '';
-		    ing_string += ri.prep_notes? `, ${ri.prep_notes}` : '';
+		        ing_string += ri.prep_notes? `, ${ri.prep_notes}` : '';
 		    
 	            if (cat === 'seasoning') {
-			   	ingredient_collection[cat].push(' - ' + fullIngredient.name);
-		    } else {
-			if (!(cat in ingredient_collection[loc])) {
-				ingredient_collection[loc][cat] = []
-			}
-               	    	ingredient_collection[loc][cat].push(ing_string);
-		    }
-            	}
-       	    });
-
+			   	    ingredient_collection[cat].push(' - ' + fullIngredient.name);
+		        } else {
+               	    ingredient_collection[loc].push(ing_string);
+		        }
+            }
+       	});
 	})
 	printIngredientCollection(ingredient_collection);
 }
@@ -186,28 +183,13 @@ function printIngredientCollection(ingredient_collection) {
     const sortedKeys = Object.keys(ingredient_collection).sort();
 
     sortedKeys.forEach(loc => {
-	output += `${loc}\n`;
-
-        const categories = ingredient_collection[loc];
-
-        // sort categories alphabetically
-        const sortedCats = Object.keys(categories).sort();
+	    output += `${loc}\n`;
 	
-	if (loc === 'seasoning') {
-		const sorted = categories.sort();
-		output += sorted.join("\n") + "\n\n";
-	}
-        sortedCats.forEach(cat => {
-	    if (loc !== 'seasoning') {
-            	// Sort each category's ingredient list alphabetically
-            	categories[cat].sort((a, b) =>
+        loc.sort((a, b) =>
                 	a.localeCompare(b, 'en', { sensitivity: 'base' })
-            	);
-
-            	output += categories[cat].join("\n") + "\n";
-	    }
-        });
-	output += "\n\n";
+        );
+        output += loc.join("\n");
+	    output += "\n\n";
     });
     const groceryModal = document.querySelector("#groceryListModal");
     openModal(groceryModal);
