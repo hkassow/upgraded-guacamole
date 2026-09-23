@@ -2,3 +2,4 @@ certs/**
 secrets/**
 tmp/**
 backups/**
+cache_bust.sh

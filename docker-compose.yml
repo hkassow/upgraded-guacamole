@@ -13,10 +13,12 @@ services:
       - gouda_ip
       - google_client_id
       - google_client_secret
+      - deepinfra_api_key
     environment:
       - CGO_ENABLED=0
       - DATABASE_URL=postgres://postgres:postgres@db:5432/guac?sslmode=disable
       - INTERNAL_API_KEY_FILE=/run/secrets/internal_api_key
+      - DEEPINFRA_API_KEY_FILE=/run/secrets/deepinfra_api_key
       - GOUDA_IP_FILE=/run/secrets/gouda_ip
       - GOOGLE_CLIENT_ID_FILE=/run/secrets/google_client_id
       - GOOGLE_CLIENT_SECRET_FILE=/run/secrets/google_client_secret
@@ -49,3 +51,5 @@ secrets:
     file: ./secrets/google_client_id
   google_client_secret:
     file: ./secrets/google_client_secret
+  deepinfra_api_key:
+    file: ./secrets/deepinfra_api_key
