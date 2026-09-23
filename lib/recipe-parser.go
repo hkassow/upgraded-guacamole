@@ -95,9 +95,16 @@ Return **only valid JSON**, using the following schema:
      * "(Note 5 to omit)" → remove entirely
      * "(see notes)" → remove entirely
      * "(optional)" → add "optional" to preparation_notes if meaningful
-   - Remove alternative measurements - keep only ONE unit system:
-     * "200g / 7 oz" → keep "200g" (prefer metric)
-     * "1 cup / 240ml" → keep "1 cup" (prefer volume for liquids)
+   - Move alternative/equivalent measurements to ` + "`\"alt_amount\"`" + ` instead of discarding them:
+     * The FIRST amount written (outside parentheses, before any "/") is the primary
+       amount and goes in ` + "`\"amount\"`" + `.
+     * A SECOND amount for the same ingredient - in parentheses, or after a "/" -
+       is an alternative/equivalent measurement and goes in ` + "`\"alt_amount\"`" + `,s
+       written exactly as it appears (unit included).
+     * "200g / 7 oz" → amount: "200g", alt_amount: "7 oz"
+     * "1 cup / 240ml" → amount: "1 cup", alt_amount: "240ml"
+     * "2¾ (650ml) cups" → amount: "2¾ cups", alt_amount: "650ml"
+     * If there is no second measurement, leave ` + "`\"alt_amount\": \"\"`" + `.
    - Remove recipe cross-references:
      * "(Note 5)", "(see step 3)", "(*))" → remove entirely
  
@@ -120,6 +127,8 @@ Return **only valid JSON**, using the following schema:
      * "yellow onion, diced finely" → preparation_notes: "yellow, diced finely"
  
 3. Extract quantities:
+   - See rule 0 above for how to split a primary amount from an alt_amount when
+     two measurements are given. This rule covers the primary amount only.
    - Use only ONE measurement system (prefer metric: g, kg, ml, L)
    - If multiple units given, choose the first/primary one
    - Extract ONLY the numeric amount and unit of measurement
@@ -184,18 +193,27 @@ Return **only valid JSON**, using the following schema:
  
 Input: "½ cup finely shredded cheddar cheese"
 - amount: "½ cup"
+- alt_amount: ""
 - name: "cheddar cheese"
 - preparation_notes: "finely shredded"
  
 Input: "2 large yellow onions, finely diced"
 - amount: "2"
+- alt_amount: ""
 - name: "onions"
 - preparation_notes: "large, yellow, finely diced"
  
 Input: "200g / 7 oz streaky bacon, chopped"
 - amount: "200g"
+- alt_amount: "7 oz"
 - name: "bacon"
 - preparation_notes: "streaky, chopped"
+ 
+Input: "2¾ (650ml) cups milk whole"
+- amount: "2¾ cups"
+- alt_amount: "650ml"
+- name: "milk"
+- preparation_notes: "whole"
 `
  
 const recipeImageSystemPrompt = `
@@ -254,6 +272,7 @@ type diChatResponse struct {
 type Ingredient struct {
     Name   string `json:"name"`
     Amount string `json:"amount"`
+	AltAmount string `json:"alt_amount"`
     PreparationNotes string `json:"preparation_notes"`
 }
 

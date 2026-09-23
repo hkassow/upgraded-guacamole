@@ -92,9 +92,9 @@ func SaveParsedRecipe(ctx context.Context, title string,  userID int, parsed *Re
 
         	// Link recipe + ingredient
         	_, err = pool.Exec(ctx,
-        	    `INSERT INTO recipe_ingredient (recipe_id, ingredient_id, amount, prep_notes)
-        	     VALUES ($1, $2, $3, $4)`,
-        	    recipeID, ingredientID, ing.Amount, ing.PreparationNotes,
+        	    `INSERT INTO recipe_ingredient (recipe_id, ingredient_id, amount, alt_amount, prep_notes)
+        	     VALUES ($1, $2, $3, $4, $5)`,
+        	    recipeID, ingredientID, ing.Amount, ing.AltAmount, ing.PreparationNotes,
         	)
         	if err != nil {
         	    return err
