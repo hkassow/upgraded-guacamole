@@ -14,19 +14,20 @@ upgraded-guacamole.com
 docker exec -it guac psql -U postgres -d guac
 
 ## project todo 
-- fix editing other peoples recipes
-- allow removing/adding ingredients from recipe
+- update recipe edit flow
+    - editing other users recipes -> for followers etc
+    - add + remove ingredients improved flow
 - add alternative measurements in grocery list (cups -> grams etc)
-    -> maintain list
+    - maintain list
         1. things that dont need to be seperated out (eggs)
         2. things that should be in ML ie; liquids, milk, cream etc
         3. things that should be in grams ie; butter, flour, sugar
 - on frontend when adding recipe steps if there is ever XXX°F add celsius conversion or `375 degrees`
-    -> dont do if followed by celsius conversion
+    - dont do if followed by celsius conversion
 - continue testing deepinfra
-    -> maybe we can use a smarter/ more expensive text model for better parsing ?
+    - maybe we can use a smarter/ more expensive text model for better parsing ?
 - fix model interperting ingredients needed from recipe list
-    -> see matcha & red bean recipe
+    - see matcha & red bean recipe
 
 
 - filter recipe types
@@ -43,31 +44,31 @@ docker exec -it guac psql -U postgres -d guac
         - bread
         - snack
         - side
-        -> probably just let users create their own tags
-            -> need tag_join table
+        - probably just let users create their own tags
+            - need tag_join table
                 id
                 hashid
                 tag_id
                 type #recipe, ingredient, etc -> future proof incase we need to tag anything other than recipe
                 other_id
 
-            -> tag table
+            - tag table
                 id
                 tag -> string
 
 - custom logging function
     - maintains two logs
-        -> all logs
-        -> error logs
+        - all logs
+        - error logs
     - still outputs docker logs
 
 - add a error state to to-be parsed recipes
-    -> this way recipe wont continue to be retried
-    -> add field for storing output of recipes
+    - this way recipe wont continue to be retried
+    - add field for storing output of recipes
 
 - maybe limit random users from uploading too many recipes
-    -> unknown user can upload as many recipes
-    -> only 5~ can be parsed until user is manually verified
+    - unknown user can upload as many recipes
+    - only 5~ can be parsed until user is manually verified
 
 
     
