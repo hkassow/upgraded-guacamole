@@ -21,8 +21,10 @@ docker exec -it guac psql -U postgres -d guac
         1. things that dont need to be seperated out (eggs)
         2. things that should be in ML ie; liquids, milk, cream etc
         3. things that should be in grams ie; butter, flour, sugar
--. surface alt ingredient amounts 1/2 cup (500g) etc
+-. on frontend when adding recipe steps if there is ever XXX°F add celsius conversion or `375 degrees`
+    -> dont do if followed by celsius conversion
 -. continue testing deepinfra
+    -> maybe we can use a smarter/ more expensive text model for better parsing ?
 -. fix model interperting ingredients needed from recipe list
     -> see matcha & red bean recipe
 
@@ -33,10 +35,25 @@ docker exec -it guac psql -U postgres -d guac
     - show all recipes
     - allow tagging recipes for further filtering
         - vegan
+        - vegetarian
         - dinner
         - lunch
         - dessert
         - baking 
+        - bread
+        - snack
+        - side
+        -> probably just let users create their own tags
+            -> need tag_join table
+                id
+                hashid
+                tag_id
+                type #recipe, ingredient, etc -> future proof incase we need to tag anything other than recipe
+                other_id
+
+            -> tag table
+                id
+                tag -> string
 
 -. custom logging function
     - maintains two logs
