@@ -14,22 +14,22 @@ upgraded-guacamole.com
 docker exec -it guac psql -U postgres -d guac
 
 ## project todo 
--. fix editing other peoples recipes
--. allow removing/adding ingredients from recipe
--. add alternative measurements in grocery list (cups -> grams etc)
+- fix editing other peoples recipes
+- allow removing/adding ingredients from recipe
+- add alternative measurements in grocery list (cups -> grams etc)
     -> maintain list
         1. things that dont need to be seperated out (eggs)
         2. things that should be in ML ie; liquids, milk, cream etc
         3. things that should be in grams ie; butter, flour, sugar
--. on frontend when adding recipe steps if there is ever XXX°F add celsius conversion or `375 degrees`
+- on frontend when adding recipe steps if there is ever XXX°F add celsius conversion or `375 degrees`
     -> dont do if followed by celsius conversion
--. continue testing deepinfra
+- continue testing deepinfra
     -> maybe we can use a smarter/ more expensive text model for better parsing ?
--. fix model interperting ingredients needed from recipe list
+- fix model interperting ingredients needed from recipe list
     -> see matcha & red bean recipe
 
 
--. filter recipe types
+- filter recipe types
     - your recipes
     - recipes of people you follow
     - show all recipes
@@ -55,17 +55,17 @@ docker exec -it guac psql -U postgres -d guac
                 id
                 tag -> string
 
--. custom logging function
+- custom logging function
     - maintains two logs
         -> all logs
         -> error logs
     - still outputs docker logs
 
--. add a error state to to-be parsed recipes
+- add a error state to to-be parsed recipes
     -> this way recipe wont continue to be retried
     -> add field for storing output of recipes
 
--. maybe limit random users from uploading too many recipes
+- maybe limit random users from uploading too many recipes
     -> unknown user can upload as many recipes
     -> only 5~ can be parsed until user is manually verified
 
