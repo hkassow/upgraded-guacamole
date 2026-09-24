@@ -156,10 +156,10 @@ function submitGroceryList() {
             const fullIngredient = global_ingredients[ri.ingredient_id];
             if (fullIngredient) {
 		        loc = fullIngredient.location;
-                // ignore category for now only group by dry,dairy,meat,produce 
-	            //cat = fullIngredient.category || 'unspecified';
+                	// ignore category for now only group by dry,dairy,meat,produce 
+	            	cat = fullIngredient.category || 'unspecified';
 		        if (!(loc in ingredient_collection)) {
-		    	    ingredient_collection[loc] = {}
+		    	    ingredient_collection[loc] = []
 		        } 
 	            let ing_string = ' - ' + fullIngredient.name;
 	            ing_string += ri.amount? `, ${ri.amount}` : '';
@@ -185,10 +185,10 @@ function printIngredientCollection(ingredient_collection) {
     sortedKeys.forEach(loc => {
 	    output += `${loc}\n`;
 	
-        loc.sort((a, b) =>
-                	a.localeCompare(b, 'en', { sensitivity: 'base' })
-        );
-        output += loc.join("\n");
+	    ingredient_collection[loc].sort((a, b) =>
+            	a.localeCompare(b, 'en', { sensitivity: 'base' })
+            );
+            output += ingredient_collection[loc].join("\n");
 	    output += "\n\n";
     });
     const groceryModal = document.querySelector("#groceryListModal");
