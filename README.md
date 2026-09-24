@@ -1,5 +1,7 @@
 ## upgraded-guacamole
-A simple recipe parser for storing recipes, uses vanilla go backend and vanilla javascript backend. With Ollama running on a seperate computer/server for parsing text/images and converting to recipes.
+A recipe parser for storing recipes, uses vanilla go backend and vanilla javascript backend. 
+Currently uses deepinfra api with Qwen models to handle image and text parsing
+
 # Run locally using docker
 docker compose up --build
 
@@ -12,29 +14,45 @@ upgraded-guacamole.com
 docker exec -it guac psql -U postgres -d guac
 
 ## project todo 
--. allow uploading multiple pictures for a single recipe
 -. fix editing other peoples recipes
--. fix grocery list adding to just do dairy.meat.dry.produce
--. look into using runpod to run my qwen models
--. add backend tests
-    - create recipe manual
-    - create recipe ai fill (mock ai response)
-    - update recipe
-    - update ingredients
-    - delete recipe 
-    - add follower
-    - remove follower (when added)
+-. allow removing/adding ingredients from recipe
+-. add alternative measurements in grocery list (cups -> grams etc)
+    -> maintain list
+        1. things that dont need to be seperated out (eggs)
+        2. things that should be in ML ie; liquids, milk, cream etc
+        3. things that should be in grams ie; butter, flour, sugar
+-. surface alt ingredient amounts 1/2 cup (500g) etc
+-. continue testing deepinfra
+-. fix model interperting ingredients needed from recipe list
+    -> see matcha & red bean recipe
+
 
 -. filter recipe types
     - your recipes
     - recipes of people you follow
     - show all recipes
+    - allow tagging recipes for further filtering
+        - vegan
+        - dinner
+        - lunch
+        - dessert
+        - baking 
 
 -. custom logging function
     - maintains two logs
         -> all logs
         -> error logs
     - still outputs docker logs
+
+-. add a error state to to-be parsed recipes
+    -> this way recipe wont continue to be retried
+    -> add field for storing output of recipes
+
+-. maybe limit random users from uploading too many recipes
+    -> unknown user can upload as many recipes
+    -> only 5~ can be parsed until user is manually verified
+
+
     
 ## future implementations
 # website stuff
