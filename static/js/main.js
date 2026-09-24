@@ -145,60 +145,57 @@ function setMakingGroceryList() {
 
 function submitGroceryList() {
 	const recipe_ids = [...document.querySelectorAll(".recipe-card.selected")]
-            .map(card => card.dataset.id);
-	
-	const ingredient_collection = {'seasoning': []};
-
-	recipe_ids.forEach(id => {
-	    const recipe = global_recipes[id];
-        if (!recipe || !recipe.ingredients) return;
-	    recipe.ingredients.forEach(ri => {
-            const fullIngredient = global_ingredients[ri.ingredient_id];
-            if (fullIngredient) {
-		        loc = fullIngredient.location;
-                	// ignore category for now only group by dry,dairy,meat,produce 
-	            	cat = fullIngredient.category || 'unspecified';
-		        if (!(loc in ingredient_collection)) {
-		    	    ingredient_collection[loc] = []
-		        } 
-	            let ing_string = ' - ' + fullIngredient.name;
-	            ing_string += ri.amount? `, ${ri.amount}` : '';
-		        ing_string += ri.prep_notes? `, ${ri.prep_notes}` : '';
-		    
-	            if (cat === 'seasoning') {
-			   	    ingredient_collection[cat].push(' - ' + fullIngredient.name);
-		        } else {
-               	    ingredient_collection[loc].push(ing_string);
-		        }
-            }
-       	});
-	})
+		.map(card => card.dataset.id);
+ 
+	const ingredient_collection = buildIngredientCollection(
+		recipe_ids,
+		global_recipes,
+		global_ingredients,
+	);
+ 
 	printIngredientCollection(ingredient_collection);
 }
 
 function printIngredientCollection(ingredient_collection) {
-    let output = "";
+	let output = "";
 
-    // Sort keys
-    const sortedKeys = Object.keys(ingredient_collection).sort();
+	const { byRecipe, ...locationBuckets } = ingredient_collection;
+ 
+	const sortedKeys = Object.keys(locationBuckets).sort();
+ 
+	sortedKeys.forEach(loc => {
+		const lines = locationBuckets[loc];
+		if (!lines || lines.length === 0) return;
+ 
+		output += `${loc}\n`;
+ 
+		const sortedLines = [...lines].sort((a, b) =>
+			a.localeCompare(b, 'en', { sensitivity: 'base' })
+		);
+		output += sortedLines.join("\n");
+		output += "\n\n";
+	});
+ 
+	if (byRecipe && byRecipe.length > 0) {
+		output += "--- By Recipe (unmerged) ---\n\n";
+		byRecipe.forEach(({ title, lines }) => {
+			if (!lines || lines.length === 0) return;
+			output += `${title}\n`;
+			output += lines.join("\n");
+			output += "\n\n";
+		});
+	}
+ 
+	const groceryModal = document.querySelector("#groceryListModal");
+	openModal(groceryModal);
+	const groceryText = document.querySelector("#groceryListText");
+	groceryText.textContent = output.trim();
+ 
 
-    sortedKeys.forEach(loc => {
-	    output += `${loc}\n`;
-	
-	    ingredient_collection[loc].sort((a, b) =>
-            	a.localeCompare(b, 'en', { sensitivity: 'base' })
-            );
-            output += ingredient_collection[loc].join("\n");
-	    output += "\n\n";
-    });
-    const groceryModal = document.querySelector("#groceryListModal");
-    openModal(groceryModal);
-    const groceryText = document.querySelector("#groceryListText");
-    groceryText.textContent = output.trim();
-    const btn = document.getElementById("groceryListCopyBtn");
-    btn.addEventListener("click", () => {
-        navigator.clipboard.writeText(output.trim());
-    });
+	const btn = document.getElementById("groceryListCopyBtn");
+	btn.onclick = () => {
+		navigator.clipboard.writeText(output.trim());
+	};
 }
 
 // -------- user --------
