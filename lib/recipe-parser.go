@@ -45,6 +45,7 @@ Return **only valid JSON**, using the following schema:
     {
       "name": "string",
       "amount": "string",
+      "alt_amount": "string",
       "preparation_notes": "string"
     }
   ]
@@ -52,7 +53,7 @@ Return **only valid JSON**, using the following schema:
  
 ### EXTRACTION REQUIREMENTS
 1. Extract EVERY step from the input text - do not skip or omit any steps.
-2. Extract EVERY ingredient from the input text - do not skip or omit any ingredients.
+2. Extract EVERY ingredient listed in the input's ingredients list section - do not skip or omit any ingredients. Do NOT create additional ingredient entries from mentions inside the steps (see INGREDIENT RULE 7 below).
 3. If no steps are found, return: "steps": {"main": []}
 4. If no ingredients are found, return: "ingredients": []
 5. Do not add, invent, or infer steps or ingredients that are not in the original text.
@@ -99,7 +100,7 @@ Return **only valid JSON**, using the following schema:
      * The FIRST amount written (outside parentheses, before any "/") is the primary
        amount and goes in ` + "`\"amount\"`" + `.
      * A SECOND amount for the same ingredient - in parentheses, or after a "/" -
-       is an alternative/equivalent measurement and goes in ` + "`\"alt_amount\"`" + `,s
+       is an alternative/equivalent measurement and goes in ` + "`\"alt_amount\"`" + `,
        written exactly as it appears (unit included).
      * "200g / 7 oz" → amount: "200g", alt_amount: "7 oz"
      * "1 cup / 240ml" → amount: "1 cup", alt_amount: "240ml"
@@ -129,8 +130,6 @@ Return **only valid JSON**, using the following schema:
 3. Extract quantities:
    - See rule 0 above for how to split a primary amount from an alt_amount when
      two measurements are given. This rule covers the primary amount only.
-   - Use only ONE measurement system (prefer metric: g, kg, ml, L)
-   - If multiple units given, choose the first/primary one
    - Extract ONLY the numeric amount and unit of measurement
      * Valid: "200g", "2 cups", "1/2 tsp", "½ cup", "3 tbsp"
      * Invalid: "½ cup finely shredded" (remove "finely shredded")
@@ -153,30 +152,28 @@ Return **only valid JSON**, using the following schema:
    - "2 eggs, beaten" → name: "eggs", amount: "2", preparation_notes: "beaten"
  
 6. Handle duplicate ingredients:
-   - If the same ingredient appears multiple times, create separate entries.
+   - This applies only when the ingredients list section itself lists the same ingredient
+     on more than one separate line (e.g. two "butter" lines - one for a sauce, one for
+     a dough). It does NOT apply to an ingredient being mentioned again later in the steps
+     - see rule 7 for that case.
+   - If the ingredients list has the same ingredient on separate lines, create separate entries.
    - Add context to preparation_notes if helpful:
      * First mention: {"name": "butter", "amount": "2 tbsp", "preparation_notes": "for sauce"}
      * Second mention: {"name": "butter", "amount": "1/4 cup", "preparation_notes": "for dough"}
-
-7. Handle ingredient alternatives (the word "or" offering interchangeable options):
-   - If a single ingredient line offers interchangeable alternatives (e.g. "pecans or
-     walnuts", "butter or margarine", "chicken stock or vegetable stock"), this is ONE
-     ingredient entry, NOT two.
-   - Only apply this when the alternatives could each fill the same role in the line
-     item. Do NOT apply this to "or to taste" / "or as needed" (these are amount
-     modifiers, not alternatives) or to two separately-listed ingredients that happen
-     to contain the word "or".
-   - Use the first-listed option as the "name".
-   - Add the alternative to "preparation_notes" as "or [alternative]", placed LAST,
-     after any variety/cut or preparation-method notes.
-   - Do NOT create a separate ingredient entry for the alternative option.
-   - Examples:
-     * "1 cup pecans or walnuts, chopped" →
-       {"name": "pecans", "amount": "1 cup", "preparation_notes": "chopped, or walnuts"}
-     * "2 tbsp butter or margarine" →
-       {"name": "butter", "amount": "2 tbsp", "preparation_notes": "or margarine"}
-     * "1 tsp salt, or to taste" →
-       {"name": "salt", "amount": "1 tsp", "preparation_notes": ""}
+ 
+7. Do NOT create ingredient entries from the steps:
+   - Ingredients come ONLY from the ingredients list section of the input. If the input has
+     no distinguishable ingredients list at all (ingredients are only ever described within
+     the steps), extract them from the steps instead - this exception is rare.
+   - The steps frequently refer back to an ingredient that's already in the ingredients list,
+     to describe how much of it to use at that point (e.g. "the remaining sugar", "3
+     tablespoons of the sugar", "the vanilla", "half the butter"). These are usage
+     instructions, NOT new ingredients - do not create an additional ingredient entry for
+     them, even if the wording or amount doesn't exactly match the ingredients list line.
+   - Example: ingredients list has "1½ cups sugar". Steps say "3 tablespoons of the sugar"
+     (step 1) and "remaining 1¼ cups plus 2 tablespoons sugar" (step 2). Output ONE
+     ingredient entry for sugar (from the ingredients list), not three.
+ 
 ---
  
 ### OUTPUT RULES
@@ -184,6 +181,8 @@ Return **only valid JSON**, using the following schema:
 - **Return JSON only**, no explanations or markdown.
 - JSON must be valid and parseable.
 - Do not invent ingredients or steps.
+- Do not create ingredient entries from mentions inside the steps that refer back to an
+  ingredient already in the ingredients list (see INGREDIENT RULE 7).
 - Do not omit subcomponent steps (e.g., sauces, toppings, fillings).
 - Follow this schema strictly.
  
