@@ -18,6 +18,7 @@ type ParsedIngredient struct {
     Amount           	string `json:"amount"`
     AltAmount           string `json:"alt_amount"`
     PreparationNotes 	string `json:"preparation_notes"`
+    Component           string `json:"component"`
     IngredientId     	int `json:"ingredient_id"`
     RecipeIngredientId	int `json:"recipe_ingredient_id"`
 }
@@ -57,6 +58,9 @@ func HandleManualRecipePost(ctx context.Context, userID int, rawRecipe models.Ra
 // marked parsed in the same transaction, so a job can't be saved twice.
 func SaveParsedRecipe(ctx context.Context, title string,  userID int, parsed *RecipeParsed, jobID int) error {
 	pool := db.Pool
+
+	// covers model output, reused parsed_json from older runs, and manual recipes (all "main")
+	normalizeIngredientComponents(parsed)
 
 	steps, err := json.Marshal(parsed.Steps)
     if err != nil {
@@ -114,9 +118,9 @@ func SaveParsedRecipe(ctx context.Context, title string,  userID int, parsed *Re
 
         	// Link recipe + ingredient
         	_, err = tx.Exec(ctx,
-        	    `INSERT INTO recipe_ingredient (recipe_id, ingredient_id, amount, alt_amount, prep_notes)
-        	     VALUES ($1, $2, $3, $4, $5)`,
-        	    recipeID, ingredientID, ing.Amount, ing.AltAmount, ing.PreparationNotes,
+        	    `INSERT INTO recipe_ingredient (recipe_id, ingredient_id, amount, alt_amount, prep_notes, component)
+        	     VALUES ($1, $2, $3, $4, $5, $6)`,
+        	    recipeID, ingredientID, ing.Amount, ing.AltAmount, ing.PreparationNotes, ing.Component,
         	)
         	if err != nil {
         	    return err
@@ -145,6 +149,7 @@ func GetAllRecipes(ctx context.Context, userID int) ([]RecipeResponse, error) {
                 'amount', ri.amount,
                 'alt_amount', ri.alt_amount,
                 'preparation_notes', ri.prep_notes,
+                'component', ri.component,
 	            'ingredient_id', i.id,
 	            'recipe_ingredient_id', ri.id
             ) ORDER BY ri.id) FILTER (WHERE ri.id IS NOT NULL), '[]') as ingredients
@@ -235,29 +240,36 @@ func UpdateRecipe(ctx context.Context, recipeID int, req models.UpdateRecipeRequ
     for _, ing := range req.UpdatedIngredients {
 
         // 1. Get the current ingredient info to detect what changed
-        var currentName, currentAmount, currentNotes string
+        var currentName, currentAmount, currentNotes, currentComponent string
 
         err := tx.QueryRow(ctx,
-            `SELECT i.name, COALESCE(ri.amount, ''), COALESCE(ri.prep_notes, '')
+            `SELECT i.name, COALESCE(ri.amount, ''), COALESCE(ri.prep_notes, ''), ri.component
              FROM recipe_ingredient ri
              JOIN ingredients i ON ri.ingredient_id = i.id
              WHERE ri.id = $1 AND ri.recipe_id = $2`,
             ing.RecipeIngredientID, recipeID,
-        ).Scan(&currentName, &currentAmount, &currentNotes)
+        ).Scan(&currentName, &currentAmount, &currentNotes, &currentComponent)
         if err != nil {
             return fmt.Errorf("fetch existing recipe ingredient %d: %w", ing.RecipeIngredientID, err)
         }
 
+        component := ing.Component
+        if component == "" {
+            component = currentComponent
+        } else if _, ok := steps[component]; !ok && component != currentComponent && component != defaultComponent {
+            return fmt.Errorf("ingredient %q: recipe has no %q section", ing.Name, component)
+        }
+
         // --------------------------------
-        // Case A: Only amount or notes changed
+        // Case A: Only amount, notes or component changed
         // --------------------------------
         if ing.Name == currentName {
-            if ing.Amount != currentAmount || ing.PreparationNotes != currentNotes {
+            if ing.Amount != currentAmount || ing.PreparationNotes != currentNotes || component != currentComponent {
                 _, err := tx.Exec(ctx,
                     `UPDATE recipe_ingredient
-                     SET amount = $1, prep_notes = $2
-                     WHERE id = $3`,
-                    ing.Amount, ing.PreparationNotes, ing.RecipeIngredientID,
+                     SET amount = $1, prep_notes = $2, component = $3
+                     WHERE id = $4`,
+                    ing.Amount, ing.PreparationNotes, component, ing.RecipeIngredientID,
                 )
                 if err != nil {
                     return fmt.Errorf("update recipe_ingredient: %w", err)
@@ -293,9 +305,9 @@ func UpdateRecipe(ctx context.Context, recipeID int, req models.UpdateRecipeRequ
         // 2. Update the existing row in place: keeps its id (ordering) and alt_amount.
         _, err = tx.Exec(ctx,
             `UPDATE recipe_ingredient
-             SET ingredient_id = $1, amount = $2, prep_notes = $3
-             WHERE id = $4 AND recipe_id = $5`,
-            newIngredientID, ing.Amount, ing.PreparationNotes, ing.RecipeIngredientID, recipeID,
+             SET ingredient_id = $1, amount = $2, prep_notes = $3, component = $4
+             WHERE id = $5 AND recipe_id = $6`,
+            newIngredientID, ing.Amount, ing.PreparationNotes, component, ing.RecipeIngredientID, recipeID,
         )
         if err != nil {
             return fmt.Errorf("update recipe_ingredient: %w", err)

@@ -47,7 +47,8 @@ Return **only valid JSON**, using the following schema:
       "name": "string",
       "amount": "string",
       "alt_amount": "string",
-      "preparation_notes": "string"
+      "preparation_notes": "string",
+      "component": "string"
     }
   ],
   "ingredients_used_for_step": {
@@ -220,9 +221,10 @@ Example - given ingredients "1½ cups sugar", "2 cups flour", "1 tsp vanilla ext
      a dough). It does NOT apply to an ingredient being mentioned again later in the steps
      - see rule 7 for that case.
    - If the ingredients list has the same ingredient on separate lines, create separate entries.
-   - Add context to preparation_notes if helpful:
-     * First mention: {"name": "butter", "amount": "2 tbsp", "preparation_notes": "for sauce"}
-     * Second mention: {"name": "butter", "amount": "1/4 cup", "preparation_notes": "for dough"}
+   - Use "component" (rule 8) to say which section each entry is for - do NOT put
+     "for sauce" / "for dough" in preparation_notes:
+     * First mention: {"name": "butter", "amount": "2 tbsp", "preparation_notes": "", "component": "sauce"}
+     * Second mention: {"name": "butter", "amount": "1/4 cup", "preparation_notes": "", "component": "dough"}
  
 7. Do NOT create ingredient entries from the steps:
    - Ingredients come ONLY from the ingredients list section of the input. If the input has
@@ -236,6 +238,26 @@ Example - given ingredients "1½ cups sugar", "2 cups flour", "1 tsp vanilla ext
    - Example: ingredients list has "1½ cups sugar". Steps say "3 tablespoons of the sugar"
      (step 1) and "remaining 1¼ cups plus 2 tablespoons sugar" (step 2). Output ONE
      ingredient entry for sugar (from the ingredients list), not three.
+
+8. Assign each ingredient a "component":
+   - "component" MUST be exactly one of the keys you used in "steps" (e.g. "main", "sauce"),
+     spelled the same way, lowercase.
+   - Use the ingredients list's OWN section headings to decide. If the ingredients list has a
+     heading like "For the sauce:" or "Filling", every ingredient under that heading gets
+     that component (the same key used for that section in "steps").
+   - Ingredients under no heading, or under a heading for the main dish, get "main".
+   - If the ingredients list has NO section headings at all, every ingredient gets "main" -
+     do NOT guess sections from the steps.
+   - If an ingredient is listed under two headings, keep two entries (see rule 6), each
+     with its own component.
+   - Example - ingredients list:
+       500g chicken thighs
+       1 onion, diced
+       For the sauce:
+       2 tbsp soy sauce
+       1 tbsp honey
+     → chicken thighs and onion get "component": "main"; soy sauce and honey get
+       "component": "sauce" (and the sauce steps go under "steps"."sauce").
  
 ---
  
@@ -336,6 +358,7 @@ type Ingredient struct {
     Amount string `json:"amount"`
     AltAmount string `json:"alt_amount"`
     PreparationNotes string `json:"preparation_notes"`
+    Component string `json:"component"`
 }
 
 type StepIngredient struct {
@@ -559,7 +582,7 @@ func logSchemaDrift(raw string) {
 		if err := json.Unmarshal(rawIngredients, &ingredients); err == nil {
 			for i, ing := range ingredients {
 				for key := range ing {
-					if key != "name" && key != "amount" && key != "preparation_notes"  && key != "alt_amount" {
+					if key != "name" && key != "amount" && key != "preparation_notes"  && key != "alt_amount" && key != "component" {
 						log.Printf("deepinfra: unexpected field %q in ingredients[%d]", key, i)
 					}
 				}
@@ -594,6 +617,55 @@ func logStepIngredientIssues(parsed *RecipeParsed) {
 	}
 }
 
+const defaultComponent = "main"
+
+// normalizeIngredientComponents makes every ingredient's component one of the keys in parsed.Steps.
+// A missing or unknown component is inferred from ingredients_used_for_step when the ingredient is
+// only used in one section, otherwise it falls back to "main".
+func normalizeIngredientComponents(parsed *RecipeParsed) {
+	normalize := func(s string) string { return strings.ToLower(strings.TrimSpace(s)) }
+
+	stepKeys := make(map[string]string, len(parsed.Steps))
+	for key := range parsed.Steps {
+		stepKeys[normalize(key)] = key
+	}
+
+	// ingredient name -> components whose steps use it
+	usedIn := make(map[string]map[string]bool)
+	for component, byStep := range parsed.IngredientsUsedForStep {
+		if _, ok := parsed.Steps[component]; !ok {
+			continue
+		}
+		for _, used := range byStep {
+			for _, u := range used {
+				name := normalize(u.Name)
+				if usedIn[name] == nil {
+					usedIn[name] = make(map[string]bool)
+				}
+				usedIn[name][component] = true
+			}
+		}
+	}
+
+	for i := range parsed.Ingredients {
+		ing := &parsed.Ingredients[i]
+		if key, ok := stepKeys[normalize(ing.Component)]; ok {
+			ing.Component = key
+			continue
+		}
+
+		if ing.Component != "" {
+			log.Printf("recipe: ingredient %q has component %q that is not in steps", ing.Name, ing.Component)
+		}
+
+		ing.Component = defaultComponent
+		if components := usedIn[normalize(ing.Name)]; len(components) == 1 {
+			for component := range components {
+				ing.Component = component
+			}
+		}
+	}
+}
 
 func ParseRecipeCallDeepInfra(recipeText string) (*RecipeParsed, error) {
 	return extractRecipeJSON(recipeText)

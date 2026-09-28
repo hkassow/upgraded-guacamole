@@ -714,6 +714,27 @@ function handleModalBackgroundClick(event, modalElement) {
     }
 }
 
+// recipes saved before sections existed have no component, treat them as main
+function ingredientComponent(ing) {
+    return ing.component || 'main';
+}
+
+// recipe sections in display order: main first, then the other step sections, then any
+// section only an ingredient uses
+function recipeComponents(recipe) {
+    const components = ['main'];
+    const add = (component) => {
+        if (!components.includes(component)) components.push(component);
+    };
+    Object.keys(recipe.steps || {}).forEach(add);
+    recipe.ingredients.forEach(ing => add(ingredientComponent(ing)));
+    return components;
+}
+
+function capitalizeComponent(component) {
+    return component.charAt(0).toUpperCase() + component.slice(1);
+}
+
 function createRecipeModal(card, recipe) {
     const modal = document.createElement('div');
     modal.className = 'modal';
@@ -734,7 +755,7 @@ function createRecipeModal(card, recipe) {
             : '' }
 	        <div class="viewRecipe">
             	<h3>Ingredients</h3>
-            	<ul class="ingredientsList"></ul>
+            	<div class="ingredientsList"></div>
            	<div class="stepsContainer"></div>
 	    </div>
 	    <div class="editRecipe" style="display: none;">
@@ -803,14 +824,17 @@ function createRecipeModal(card, recipe) {
     modal.querySelector(".submit-edit-recipe-btn").addEventListener("click", (event) => {
 	const originals = recipe.ingredients;
 	const updated_ingredients = recipe.ingredients.map((ing, idx) => {
+            // section picker only exists when the recipe has more than one section
+            const componentSelect = modal.querySelector(`.componentInput[data-index="${idx}"]`);
             return {
 		...ing,
 		idx: idx,
                 name: modal.querySelector(`.nameInput[data-index="${idx}"]`).value.trim(),
                 amount: modal.querySelector(`.amountInput[data-index="${idx}"]`).value.trim(),
-                preparation_notes: modal.querySelector(`.prepInput[data-index="${idx}"]`).value.trim()
+                preparation_notes: modal.querySelector(`.prepInput[data-index="${idx}"]`).value.trim(),
+                component: componentSelect ? componentSelect.value : ingredientComponent(ing)
             };
-        }).filter(ing => ing.name != originals[ing.idx].name || ing.amount != originals[ing.idx].amount || ing.preparation_notes != originals[ing.idx].preparation_notes).map(({idx, ...keepAttrs}) => keepAttrs);
+        }).filter(ing => ing.name != originals[ing.idx].name || ing.amount != originals[ing.idx].amount || ing.preparation_notes != originals[ing.idx].preparation_notes || ing.component != ingredientComponent(originals[ing.idx])).map(({idx, ...keepAttrs}) => keepAttrs);
 
 	
 	const updated_instructions = Array.from(modal.querySelectorAll('.edit-instructions'), (ing) => {
@@ -828,12 +852,28 @@ function createRecipeModal(card, recipe) {
 
     });
 
-    // Populate ingredients
+    // Populate ingredients, grouped by recipe section (only shows section headings when there's more than one)
     const ingredientsList = modal.querySelector('.ingredientsList');
-    recipe.ingredients.forEach(ing => {
-        const li = document.createElement('li');
-        li.textContent = `${ing.amount} ${ing.alt_amount? '(' + ing.alt_amount + ') ' : ''}${ing.name} ${ing.preparation_notes || ''}`.trim();
-        ingredientsList.appendChild(li);
+    const components = recipeComponents(recipe);
+    const showSectionHeadings = components.length > 1;
+    components.forEach(component => {
+        const sectionIngredients = recipe.ingredients.filter(ing => ingredientComponent(ing) === component);
+        if (!sectionIngredients.length) return;
+
+        if (showSectionHeadings && component !== 'main') {
+            const heading = document.createElement('h4');
+            heading.className = 'ingredient-section-heading';
+            heading.textContent = capitalizeComponent(component);
+            ingredientsList.appendChild(heading);
+        }
+
+        const ul = document.createElement('ul');
+        sectionIngredients.forEach(ing => {
+            const li = document.createElement('li');
+            li.textContent = `${ing.amount} ${ing.alt_amount? '(' + ing.alt_amount + ') ' : ''}${ing.name} ${ing.preparation_notes || ''}`.trim();
+            ul.appendChild(li);
+        });
+        ingredientsList.appendChild(ul);
     });
 
     // Populatae edit ingredients
@@ -851,6 +891,22 @@ function createRecipeModal(card, recipe) {
             <input type="text" class="amountInput" data-index="${idx}" placeholder="Amount" value="${ing.amount || ''}">
             <input type="text" class="prepInput" data-index="${idx}" placeholder="Prep Notes" value="${ing.preparation_notes || ''}">
 	    `;
+
+        if (showSectionHeadings) {
+            const select = document.createElement('select');
+            select.className = 'componentInput';
+            select.dataset.index = idx;
+            select.title = 'Recipe section';
+            components.forEach(component => {
+                const option = document.createElement('option');
+                option.value = component;
+                option.textContent = capitalizeComponent(component);
+                select.appendChild(option);
+            });
+            select.value = ingredientComponent(ing);
+            row.appendChild(select);
+        }
+
 	    editIngredientsList.appendChild(row);
     });
     

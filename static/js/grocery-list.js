@@ -146,7 +146,7 @@ function buildIngredientCollection(recipeIds, recipesById, ingredientsById) {
 			// Unmerged, per-recipe line - mirrors the original ing_string format.
 			let line = ` - ${fullIngredient.name}`;
 			if (ri.amount) line += `, ${ri.amount}`;
-			if (ri.prep_notes) line += `, ${ri.prep_notes}`;
+			if (ri.preparation_notes) line += `, ${ri.preparation_notes}`;
 			recipeLines.push(line);
 		});
 

@@ -34,6 +34,7 @@ type UpdatedIngredient struct {
     Name               string `json:"name"`
     Amount             string `json:"amount"`
     PreparationNotes   string `json:"preparation_notes"`
+    Component          string `json:"component"`
     IngredientID       int    `json:"ingredient_id"`
     RecipeIngredientID int    `json:"recipe_ingredient_id"`
 }

@@ -1,0 +1,1 @@
+ALTER TABLE recipe_ingredient ADD COLUMN IF NOT EXISTS component TEXT NOT NULL DEFAULT 'main';
