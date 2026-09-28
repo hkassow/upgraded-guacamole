@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	"go-guacamole/db"
@@ -337,6 +338,79 @@ func TestGetAllRecipesToleratesBadStepIngredients(t *testing.T) {
 // ---------------------------------------------------------------------------
 // updating recipes
 // ---------------------------------------------------------------------------
+
+func TestNormalizeTitle(t *testing.T) {
+	got, err := NormalizeTitle("  Honey   soy\tchicken \n")
+	if err != nil || got != "Honey soy chicken" {
+		t.Errorf("NormalizeTitle = %q, %v", got, err)
+	}
+
+	for _, bad := range []string{"", "   ", strings.Repeat("a", maxTitleLength+1)} {
+		if _, err := NormalizeTitle(bad); !errors.Is(err, ErrInvalidTitle) {
+			t.Errorf("NormalizeTitle(%q) err = %v, want ErrInvalidTitle", bad, err)
+		}
+	}
+	// length is counted in characters, not bytes
+	if _, err := NormalizeTitle(strings.Repeat("é", maxTitleLength)); err != nil {
+		t.Errorf("%d accented characters should be allowed: %v", maxTitleLength, err)
+	}
+}
+
+func TestUpdateRecipeTitle(t *testing.T) {
+	ctx := testutil.SetupDB(t)
+	alice := testutil.CreateUser(t, ctx, "alice")
+	r := saveSample(t, ctx, alice, "Chicken")
+
+	title := "  Honey soy   chicken "
+	if err := UpdateRecipe(ctx, r.ID, alice.ID, models.UpdateRecipeRequest{Title: &title}); err != nil {
+		t.Fatalf("UpdateRecipe: %v", err)
+	}
+
+	after := recipeByTitle(t, ctx, alice.ID, "Honey soy chicken")
+	if after.ID != r.ID || !reflect.DeepEqual(after.Ingredients, r.Ingredients) {
+		t.Error("renaming should only change the title")
+	}
+}
+
+func TestUpdateRecipeInvalidTitleRollsBack(t *testing.T) {
+	ctx := testutil.SetupDB(t)
+	alice := testutil.CreateUser(t, ctx, "alice")
+	r := saveSample(t, ctx, alice, "Chicken")
+
+	empty := "   "
+	err := UpdateRecipe(ctx, r.ID, alice.ID, models.UpdateRecipeRequest{
+		Title:        &empty,
+		UpdatedSteps: []models.UpdatedStep{{StepName: "main", NewSteps: "Changed."}},
+	})
+	if !errors.Is(err, ErrInvalidTitle) {
+		t.Fatalf("err = %v, want ErrInvalidTitle", err)
+	}
+
+	// a valid title in the same edit as an invalid tag is rolled back too
+	title := "Renamed"
+	tooLong := []string{strings.Repeat("x", maxTagLength+1)}
+	err = UpdateRecipe(ctx, r.ID, alice.ID, models.UpdateRecipeRequest{Title: &title, Tags: &tooLong})
+	if !errors.Is(err, ErrInvalidTags) {
+		t.Fatalf("err = %v, want ErrInvalidTags", err)
+	}
+
+	if after := recipeByTitle(t, ctx, alice.ID, "Chicken"); !reflect.DeepEqual(after, r) {
+		t.Errorf("recipe changed despite the failed edits: %+v", after)
+	}
+}
+
+func TestUpdateRecipeTitleOnlyOwner(t *testing.T) {
+	ctx := testutil.SetupDB(t)
+	alice := testutil.CreateUser(t, ctx, "alice")
+	mallory := testutil.CreateUser(t, ctx, "mallory")
+	r := saveSample(t, ctx, alice, "Chicken")
+
+	title := "Hacked"
+	if err := UpdateRecipe(ctx, r.ID, mallory.ID, models.UpdateRecipeRequest{Title: &title}); !errors.Is(err, ErrRecipeNotFound) {
+		t.Fatalf("err = %v, want ErrRecipeNotFound", err)
+	}
+	recipeByTitle(t, ctx, alice.ID, "Chicken") // still there under its old name
+}
 
 func TestUpdateRecipeAmountAndNotes(t *testing.T) {
 	ctx := testutil.SetupDB(t)

@@ -664,15 +664,18 @@ async function deleteRecipe(id, modal) {
     }
 }
 
-// tags: the full new tag list, or null when the tags weren't changed
-async function submitRecipeChanges(id, updated_steps, updated_ingredients, tags, modal) {
-    if (!updated_steps?.length && !updated_ingredients?.length && tags === null) {
+// changes: { updated_steps, updated_ingredients, tags, title } - tags (the full new list) and
+// title are null when they weren't changed
+async function submitRecipeChanges(id, changes, modal) {
+    const { updated_steps, updated_ingredients, tags, title } = changes;
+    if (!updated_steps?.length && !updated_ingredients?.length && tags === null && title === null) {
     	showToast('No changes were made to the recipe');
 	return;
     }
     try {
         const body = {recipe_id: id, updated_steps, updated_ingredients};
         if (tags !== null) body.tags = tags;
+        if (title !== null) body.title = title;
 
     	const response = await fetch('/recipes', {
 	    method: 'PATCH',
@@ -948,6 +951,8 @@ function createRecipeModal(card, recipe) {
            	<div class="stepsContainer"></div>
 	    </div>
 	    <div class="editRecipe" style="display: none;">
+	        <h3>Title</h3>
+	        <input type="text" class="editTitle" maxlength="200" aria-label="Recipe title">
 	        <h3>Tags</h3>
 	        <div class="editTags"></div>
 	        <h3>Edit Ingredients</h3>
@@ -971,6 +976,10 @@ function createRecipeModal(card, recipe) {
 
     const tagEditor = createTagEditor(recipe.tags || []);
     modal.querySelector('.editTags').appendChild(tagEditor.element);
+
+    // set as a value, not in the HTML, so quotes etc. in a title can't break the input
+    const titleInput = modal.querySelector('.editTitle');
+    titleInput.value = recipe.title;
 
     modal.querySelector('.close').addEventListener('click', () => closeModal(modal));
     // open recipe click
@@ -1048,7 +1057,20 @@ function createRecipeModal(card, recipe) {
 	const newTags = tagEditor.getTags();
 	const tagsChanged = [...newTags].sort().join('\n') !== [...(recipe.tags || [])].sort().join('\n');
 
-	submitRecipeChanges(recipe.id, updated_instructions, updated_ingredients, tagsChanged ? newTags : null, modal);
+	// same whitespace clean-up as the server, so "Cake " isn't seen as a change
+	const newTitle = titleInput.value.replace(/\s+/g, ' ').trim();
+	if (!newTitle) {
+	    showToast('A recipe needs a title');
+	    titleInput.focus();
+	    return;
+	}
+
+	submitRecipeChanges(recipe.id, {
+	    updated_steps: updated_instructions,
+	    updated_ingredients,
+	    tags: tagsChanged ? newTags : null,
+	    title: newTitle !== recipe.title ? newTitle : null,
+	}, modal);
 	
 	// for updated ingredients if only the amount or prep notes changed we dont need a new ingredient x recipe relation
 	// if name changes find ingredient or create and then change the linked keys

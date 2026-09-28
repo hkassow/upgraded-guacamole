@@ -176,7 +176,7 @@ func handlePatchRecipe(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	if errors.Is(err, lib.ErrInvalidTags) {
+	if errors.Is(err, lib.ErrInvalidTags) || errors.Is(err, lib.ErrInvalidTitle) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}

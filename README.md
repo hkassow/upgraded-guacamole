@@ -34,14 +34,6 @@ upgraded-guacamole.com
     - editing other users recipes -> for followers etc
     - add + remove ingredients improved flow
 
-- add alternative measurements in grocery list (cups -> grams etc)
-    - maintain list of density for conversion
-        1. things that dont need to be seperated out (eggs)
-        2. things that should be in ML ie; liquids, milk, cream etc
-        3. things that should be in grams ie; butter, flour, sugar
-
-
-
 - continue testing deepinfra
     - maybe we can use a smarter/ more expensive text model for better parsing ?
 

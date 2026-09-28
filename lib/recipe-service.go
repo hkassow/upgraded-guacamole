@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"errors"
 	"strings"
+	"unicode/utf8"
 	"encoding/json"
 	"github.com/jackc/pgx/v5"
 
@@ -234,6 +235,24 @@ func GetAllRecipes(ctx context.Context, userID int) ([]RecipeResponse, error) {
 // ErrRecipeNotFound is returned when a recipe doesn't exist or doesn't belong to the user.
 var ErrRecipeNotFound = errors.New("recipe not found")
 
+// ErrInvalidTitle is returned for an empty or overly long recipe title.
+var ErrInvalidTitle = errors.New("invalid title")
+
+const maxTitleLength = 200
+
+// NormalizeTitle trims a recipe title and collapses runs of whitespace, rejecting empty or overly
+// long titles.
+func NormalizeTitle(title string) (string, error) {
+    title = strings.Join(strings.Fields(title), " ")
+    if title == "" {
+        return "", fmt.Errorf("%w: a recipe needs a title", ErrInvalidTitle)
+    }
+    if utf8.RuneCountInString(title) > maxTitleLength {
+        return "", fmt.Errorf("%w: titles can be at most %d characters", ErrInvalidTitle, maxTitleLength)
+    }
+    return title, nil
+}
+
 // UpdateRecipe applies step and ingredient edits to a recipe owned by userID.
 func UpdateRecipe(ctx context.Context, recipeID int, userID int, req models.UpdateRecipeRequest) error {
     tx, err := db.Pool.Begin(ctx)
@@ -254,6 +273,16 @@ func UpdateRecipe(ctx context.Context, recipeID int, userID int, req models.Upda
     }
     if err != nil {
         return fmt.Errorf("failed to load recipe: %w", err)
+    }
+
+    if req.Title != nil {
+        title, err := NormalizeTitle(*req.Title)
+        if err != nil {
+            return err
+        }
+        if _, err := tx.Exec(ctx, `UPDATE recipes SET title = $1 WHERE id = $2`, title, recipeID); err != nil {
+            return fmt.Errorf("update recipe title: %w", err)
+        }
     }
 
     // nil means the tags weren't edited; an empty list removes them all

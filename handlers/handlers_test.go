@@ -387,6 +387,26 @@ func TestPatchRecipeTags(t *testing.T) {
 	}
 }
 
+func TestPatchRecipeTitle(t *testing.T) {
+	ctx := testutil.SetupDB(t)
+	alice := testutil.CreateUser(t, ctx, "alice")
+	r := createManualRecipe(t, alice, "Cake")
+
+	patch := func(title string) *httptest.ResponseRecorder {
+		return request(t, RecipesHandler, http.MethodPatch, "/recipes",
+			models.UpdateRecipeRequest{RecipeID: r.ID, Title: &title}, &alice)
+	}
+
+	expectStatus(t, patch("Lemon drizzle cake"), http.StatusOK)
+	createdRecipe(t, alice, "Lemon drizzle cake")
+
+	rec := patch("  ")
+	expectStatus(t, rec, http.StatusBadRequest)
+	if !strings.Contains(rec.Body.String(), "needs a title") {
+		t.Errorf("body = %q", rec.Body.String())
+	}
+}
+
 func TestDeleteRecipe(t *testing.T) {
 	ctx := testutil.SetupDB(t)
 	alice := testutil.CreateUser(t, ctx, "alice")
