@@ -273,10 +273,8 @@ function openAllTagsDialog(tagCounts) {
 
     dialog.append(header, find, list, noMatch, done);
 
-    // clicking the dimmed area outside the dialog closes it
-    dialog.addEventListener('click', (event) => {
-        if (event.target === dialog) dialog.close();
-    });
+    // clicking the dimmed area outside the dialog closes it (closeOnBackdropClick is in main.js)
+    closeOnBackdropClick(dialog, () => dialog.close());
     // redraw so tags picked here show up as chips, then put focus back where it was
     dialog.addEventListener('close', () => {
         dialog.remove();

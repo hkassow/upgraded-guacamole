@@ -20,6 +20,12 @@ window.addEventListener('DOMContentLoaded', () => {
     addWakeLockListener();
     addEventListenerToMenu();
     addEventListenerToRecipeAdd();
+
+    // modals written in index.html; the ones built in JS set this up when they're created
+    ['recipeModal', 'groceryListModal'].forEach(id => {
+        const modal = document.getElementById(id);
+        closeOnBackdropClick(modal, () => closeModal(modal));
+    });
 });
 
 // -------- global var --------
@@ -760,10 +766,19 @@ function closeModal(modalElement) {
     disableWakeLock();
 }
 
-function handleModalBackgroundClick(event, modalElement) {
-    if (event.target === modalElement) {
-        closeModal(modalElement);
-    }
+// Calls close when the dimmed background around a modal is clicked - but only if the press also
+// started on the background. Pressing inside (e.g. to select text in an input) and releasing
+// outside makes the browser send the click to the background too, which used to close the modal
+// and lose any unsaved edits.
+function closeOnBackdropClick(modal, close) {
+    let pressStartedOnBackdrop = false;
+    modal.addEventListener('pointerdown', (event) => {
+        pressStartedOnBackdrop = event.target === modal;
+    });
+    modal.addEventListener('click', (event) => {
+        if (event.target === modal && pressStartedOnBackdrop) close();
+        pressStartedOnBackdrop = false;
+    });
 }
 
 // suggested in the tag editor alongside any tag already used on a visible recipe
@@ -928,9 +943,7 @@ function createStepItem(recipe, component, index, text) {
 function createRecipeModal(card, recipe) {
     const modal = document.createElement('div');
     modal.className = 'modal recipe-view-modal';
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) closeModal(modal);
-    });
+    closeOnBackdropClick(modal, () => closeModal(modal));
 
     // only the owner can edit (the server also enforces this)
     modal.innerHTML = `
@@ -1235,9 +1248,7 @@ function createTagIngredientsModal(ingredients) {
     const modal = document.createElement("div");
     modal.id = "tagIngredientsModal";
     modal.className = "modal";
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) closeModal(modal);
-    });
+    closeOnBackdropClick(modal, () => closeModal(modal));
 
     modal.innerHTML = `
         <div class="modal-content" style="max-width: 900px; width: 80%;">
