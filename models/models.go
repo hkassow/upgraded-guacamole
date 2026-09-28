@@ -7,6 +7,7 @@ type RecipeJob struct {
     Images   []string
     Type    string
     User_id int
+    ParsedJSON []byte // parse result already returned by the model, reused on retry
 }
 
 type RawIngredient struct {

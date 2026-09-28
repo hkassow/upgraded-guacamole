@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"net/http"
 	"time"
@@ -22,7 +23,7 @@ const (
 	//deepInfraTextModel = "Qwen/Qwen3-32B"				 // .08 in .28 out
  
 	deepInfraVisionModel = "Qwen/Qwen3-VL-235B-A22B-Instruct" // .20 in .88 out
-	//deepInfraVisionModel = "Qwen3-VL-30B-A3B-Instruct" // .15 in .60 out
+	//deepInfraVisionModel = "Qwen/Qwen3-VL-30B-A3B-Instruct" // .15 in .60 out
 )
 const recipeTextSystemPrompt = `
 Your task is to extract structured recipe data from raw text.
@@ -48,7 +49,16 @@ Return **only valid JSON**, using the following schema:
       "alt_amount": "string",
       "preparation_notes": "string"
     }
-  ]
+  ],
+  "ingredients_used_for_step": {
+    "main": {
+      "1": [{"name": "string", "amount": "string"}],
+      "3": [{"name": "string", "amount": "string"}]
+    }
+	"component_name": {   // optional, same component keys as "steps"
+	  "2": [{"name": "string", "amount": "string"}]
+    }
+  }
 }
  
 ### EXTRACTION REQUIREMENTS
@@ -57,6 +67,7 @@ Return **only valid JSON**, using the following schema:
 3. If no steps are found, return: "steps": {"main": []}
 4. If no ingredients are found, return: "ingredients": []
 5. Do not add, invent, or infer steps or ingredients that are not in the original text.
+6. If no step uses any ingredients, return: "ingredients_used_for_step": {}
  
 ### STEP PARSING RULES
  
@@ -87,6 +98,58 @@ Return **only valid JSON**, using the following schema:
 5. Remove numbering (e.g. "1.", "Step 1", "•") but keep the original sentences.
  
 6. Each step must remain a complete, standalone instruction.
+ 
+---
+
+
+### STEP INGREDIENT USAGE RULES
+ 
+"ingredients_used_for_step" records which ingredients are ADDED OR USED in each step,
+and how much of each. It is keyed first by the same component keys as "steps" ("main",
+"sauce", etc.), then by the step's 1-based position within that component's array
+(the first step is "1", the second is "2", and so on - count carefully).
+ 
+1. Only include a step's key if that step actually adds/uses ingredients. Steps with no
+   ingredients (e.g. "Preheat the oven", "Let cool for 10 minutes") get NO key at all -
+   do not include empty arrays.
+ 
+2. List an ingredient only in the step where it is added or used from its raw form.
+   Once ingredients have been combined into a mixture, later steps that refer to that
+   mixture ("the flour mixture", "the batter", "the dough", "the sauce") list NOTHING for
+   those ingredients - do not list the individual ingredients again.
+ 
+3. "name" must exactly match the "name" of the corresponding entry in "ingredients".
+ 
+4. "amount" is the amount used IN THAT STEP:
+   - If the step states an amount ("3 tablespoons of the sugar", "remaining 1¼ cups plus 2
+     tablespoons (270 g) sugar"), use that stated amount, following the same rules as
+     ingredient amounts (one primary amount only - drop parenthetical alternatives).
+   - If the step uses the ingredient without stating an amount ("add the flour"), use the
+     full amount from the ingredients list.
+   - If the step says "the rest" or "the remaining" WITHOUT stating an amount, set
+     "amount" to "remaining". Do NOT calculate amounts.
+ 
+5. If an ingredient is used in more than one step (e.g. butter in step 1 and step 5),
+   list it in each of those steps with that step's amount.
+ 
+6. Do NOT invent ingredients here. Every "name" must correspond to an ingredient that
+   exists in the "ingredients" list.
+ 
+Example - given ingredients "1½ cups sugar", "2 cups flour", "1 tsp vanilla extract",
+"3 eggs" and these steps:
+  1. Put 3 tablespoons of the sugar in a saucepan and cook until dissolved.
+  2. Whisk the eggs, the remaining sugar, and the vanilla until pale.
+  3. Fold in the flour, then bake for 30 minutes.
+  4. Let the cake cool completely.
+ 
+"ingredients_used_for_step": {
+  "main": {
+    "1": [{"name": "sugar", "amount": "3 tablespoons"}],
+    "2": [{"name": "eggs", "amount": "3"}, {"name": "sugar", "amount": "remaining"}, {"name": "vanilla extract", "amount": "1 tsp"}],
+    "3": [{"name": "flour", "amount": "2 cups"}]
+  }
+}
+(Step 4 uses no ingredients, so it has no key.)
  
 ---
  
@@ -275,9 +338,15 @@ type Ingredient struct {
     PreparationNotes string `json:"preparation_notes"`
 }
 
+type StepIngredient struct {
+	Name   string `json:"name"`
+	Amount string `json:"amount"`
+}
+
 type RecipeParsed struct {
     Steps       map[string][]string `json:"steps"`
     Ingredients []Ingredient `json:"ingredients"`
+	IngredientsUsedForStep map[string]map[string][]StepIngredient `json:"ingredients_used_for_step"`
 }
 
 type ImageRequest struct {
@@ -412,6 +481,10 @@ func callDeepInfra(req diChatRequest) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("reading deepinfra response: %w", err)
 	}
+
+	if resp.StatusCode != http.StatusOK {
+   		return "", fmt.Errorf("deepinfra returned status %d: %s", resp.StatusCode, string(data))
+   	}
  
 	var wrapper diChatResponse
 	if err := json.Unmarshal(data, &wrapper); err != nil {
@@ -445,9 +518,26 @@ func extractRecipeJSON(rawText string) (*RecipeParsed, error) {
  
 	clean := cleanupJSON(content)
 	logSchemaDrift(clean)
-	if err := json.Unmarshal([]byte(clean), parsed); err != nil {
-		return parsed, fmt.Errorf("failed to parse recipe json: %w (raw model output: %s)", err, content)
-	}
+
+	// Decode ingredients_used_for_step separately:
+   	var envelope struct {
+   		Steps                  map[string][]string `json:"steps"`
+   		Ingredients            []Ingredient        `json:"ingredients"`
+   		IngredientsUsedForStep json.RawMessage     `json:"ingredients_used_for_step"`
+   	}
+   	if err := json.Unmarshal([]byte(clean), &envelope); err != nil {
+   		return parsed, fmt.Errorf("failed to parse recipe json: %w (raw model output: %s)", err, content)
+   	}
+   	parsed.Steps = envelope.Steps
+   	parsed.Ingredients = envelope.Ingredients
+   	if len(envelope.IngredientsUsedForStep) > 0 {
+   		if err := json.Unmarshal(envelope.IngredientsUsedForStep, &parsed.IngredientsUsedForStep); err != nil {
+   			log.Printf("deepinfra: ignoring malformed ingredients_used_for_step: %v", err)
+   			parsed.IngredientsUsedForStep = nil
+   		}
+   	}
+
+	logStepIngredientIssues(parsed)
  
 	return parsed, nil
 }
@@ -459,7 +549,7 @@ func logSchemaDrift(raw string) {
 	}
  
 	for key := range generic {
-		if key != "steps" && key != "ingredients" {
+		if key != "steps" && key != "ingredients" && key != "ingredients_used_for_step" {
 			log.Printf("deepinfra: unexpected top-level field %q in recipe JSON", key)
 		}
 	}
@@ -472,6 +562,32 @@ func logSchemaDrift(raw string) {
 					if key != "name" && key != "amount" && key != "preparation_notes"  && key != "alt_amount" {
 						log.Printf("deepinfra: unexpected field %q in ingredients[%d]", key, i)
 					}
+				}
+			}
+		}
+	}
+}
+
+func logStepIngredientIssues(parsed *RecipeParsed) {
+	known := make(map[string]bool, len(parsed.Ingredients))
+	for _, ing := range parsed.Ingredients {
+		known[strings.ToLower(strings.TrimSpace(ing.Name))] = true
+	}
+
+	for component, byStep := range parsed.IngredientsUsedForStep {
+		steps, ok := parsed.Steps[component]
+		if !ok {
+			log.Printf("deepinfra: ingredients_used_for_step has component %q that is not in steps", component)
+			continue
+		}
+		for stepKey, used := range byStep {
+			n, err := strconv.Atoi(stepKey)
+			if err != nil || n < 1 || n > len(steps) {
+				log.Printf("deepinfra: ingredients_used_for_step[%q][%q] is not a valid step number (component has %d steps)", component, stepKey, len(steps))
+			}
+			for _, u := range used {
+				if !known[strings.ToLower(strings.TrimSpace(u.Name))] {
+					log.Printf("deepinfra: ingredients_used_for_step[%q][%q] references %q, which is not in the ingredients list", component, stepKey, u.Name)
 				}
 			}
 		}
@@ -534,6 +650,30 @@ func ParseRecipeImageCallDeepInfra(images []string) (*RecipeParsed, error) {
 
 var RecipeQueue = make(chan models.RecipeJob, 100)
 
+// jobs that have failed this many times are no longer loaded for retry
+const MaxRecipeJobFailures = 3
+
+// usable reports whether a parse result has enough in it to be worth saving/reusing.
+func (p *RecipeParsed) usable() bool {
+	return p != nil && (len(p.Steps) > 0 || len(p.Ingredients) > 0)
+}
+
+// cachedRecipeParse returns the parse result stored on a job from a previous run, or nil if
+// there isn't one or it can't be used.
+func cachedRecipeParse(jobID int, raw []byte) *RecipeParsed {
+	if len(raw) == 0 {
+		return nil
+	}
+
+	parsed := &RecipeParsed{}
+	if err := json.Unmarshal(raw, parsed); err != nil || !parsed.usable() {
+		log.Printf("recipe job %d: ignoring stored parsed_json (err: %v)", jobID, err)
+		return nil
+	}
+
+	return parsed
+}
+
 func StartRecipeWorker() {
     go func() {
         for job := range RecipeQueue {
@@ -546,33 +686,48 @@ func StartRecipeWorker() {
                 var err error
                 jobID, err = CreateRecipeJob(ctx, job)
                 if err != nil {
+					log.Println("Error creating recipe job:", err)
                     continue
                 }
             }
 
-            var parsed *RecipeParsed
-            var err error
+            // reuse the model's output from a previous attempt instead of paying for another call
+            parsed := cachedRecipeParse(jobID, job.ParsedJSON)
+            if parsed != nil {
+                log.Println("Reusing stored parse result for recipe:", job.Name)
+            } else {
+                var err error
 
-            switch job.Type {
-            case "image":
-                //parsed, err = ParseRecipeImageCall(job.Images)
-				parsed, err = ParseRecipeImageCallDeepInfra(job.Images)
-            default: // "text"
-                //parsed, err = ParseRecipeCall(job.Text)
-				parsed, err = ParseRecipeCallDeepInfra(job.Text)
+                switch job.Type {
+                case "image":
+                    //parsed, err = ParseRecipeImageCall(job.Images)
+                    parsed, err = ParseRecipeImageCallDeepInfra(job.Images)
+                default: // "text"
+                    //parsed, err = ParseRecipeCall(job.Text)
+                    parsed, err = ParseRecipeCallDeepInfra(job.Text)
+                }
+
+                if err == nil && !parsed.usable() {
+                    err = fmt.Errorf("model returned no steps or ingredients")
+                }
+                if err != nil {
+                    log.Println("Error parsing recipe:", err)
+                    _ = IncrementRecipeJobFailCount(ctx, jobID)
+                    continue
+                }
+
+                if parsedJSON, err := json.Marshal(parsed); err == nil {
+                    _ = SaveRecipeJobParsedJSON(ctx, jobID, parsedJSON)
+                } else {
+                    log.Println("Error marshaling parsed recipe:", err)
+                }
             }
 
-            if err != nil {
-                log.Println("Error parsing recipe:", err)
-                continue
-            }
-
-            if err := SaveParsedRecipe(context.Background(), job.Name, job.User_id, parsed); err != nil {
+            if err := SaveParsedRecipe(ctx, job.Name, job.User_id, parsed, jobID); err != nil {
                 log.Println("Error saving recipe:", err)
+                _ = IncrementRecipeJobFailCount(ctx, jobID)
                 continue
             }
-
-            _ = MarkRecipeJobParsed(ctx, jobID)
 
             log.Println("Recipe saved successfully:", job.Name)
         }

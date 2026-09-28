@@ -26,6 +26,7 @@ type RecipeResponse struct {
     ID          int                 `json:"id"`
     Title       string              `json:"title"`
     Steps       map[string][]string `json:"steps"`
+    StepIngredients map[string]map[string][]StepIngredient `json:"step_ingredients"`
     Ingredients []ParsedIngredient  `json:"ingredients"`
 }
 
@@ -49,9 +50,12 @@ func HandleManualRecipePost(ctx context.Context, userID int, rawRecipe models.Ra
     }
     log.Printf("Manually parsed recipe being added:  %+v", parsed)
 
-    return SaveParsedRecipe(ctx, rawRecipe.Name, userID, &parsed)
+    return SaveParsedRecipe(ctx, rawRecipe.Name, userID, &parsed, 0)
 }
-func SaveParsedRecipe(ctx context.Context, title string,  userID int, parsed *RecipeParsed) error {
+
+// SaveParsedRecipe saves the recipe and its ingredients. If jobID is non-zero the recipe_job is
+// marked parsed in the same transaction, so a job can't be saved twice.
+func SaveParsedRecipe(ctx context.Context, title string,  userID int, parsed *RecipeParsed, jobID int) error {
 	pool := db.Pool
 
 	steps, err := json.Marshal(parsed.Steps)
@@ -59,11 +63,28 @@ func SaveParsedRecipe(ctx context.Context, title string,  userID int, parsed *Re
         return err
     }
 
+    var stepIngredients *string
+	if len(parsed.IngredientsUsedForStep) > 0 {
+		b, mErr := json.Marshal(parsed.IngredientsUsedForStep)
+		if mErr != nil {
+			return mErr
+		}
+		s := string(b)
+		stepIngredients = &s
+	}
+
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx) // no-op once Commit succeeds
+
 	var recipeID int64
-	err = pool.QueryRow(ctx,
-		`INSERT INTO recipes (title, steps, user_id) VALUES ($1, $2, $3) RETURNING id`,
+	err = tx.QueryRow(ctx,
+		`INSERT INTO recipes (title, steps, step_ingredients, user_id) VALUES ($1, $2, $3, $4) RETURNING id`,
 		title, 
 		steps,
+        stepIngredients,
         userID,
 	).Scan(&recipeID)
 	if err != nil {
@@ -74,13 +95,13 @@ func SaveParsedRecipe(ctx context.Context, title string,  userID int, parsed *Re
         	var ingredientID int64
 
         	// Try to find ingredient
-        	err = pool.QueryRow(ctx,
+        	err = tx.QueryRow(ctx,
         	    `SELECT id FROM ingredients WHERE LOWER(name) = LOWER($1)`,
         	    ing.Name,
         	).Scan(&ingredientID)
 
-        	if err != nil { // not found → insert
-        	    err = pool.QueryRow(ctx,
+     	    if errors.Is(err, pgx.ErrNoRows) { // not found → insert
+        	    err = tx.QueryRow(ctx,
         	        `INSERT INTO ingredients (name)
         	         VALUES ($1)
         	         RETURNING id`,
@@ -92,7 +113,7 @@ func SaveParsedRecipe(ctx context.Context, title string,  userID int, parsed *Re
         	}
 
         	// Link recipe + ingredient
-        	_, err = pool.Exec(ctx,
+        	_, err = tx.Exec(ctx,
         	    `INSERT INTO recipe_ingredient (recipe_id, ingredient_id, amount, alt_amount, prep_notes)
         	     VALUES ($1, $2, $3, $4, $5)`,
         	    recipeID, ingredientID, ing.Amount, ing.AltAmount, ing.PreparationNotes,
@@ -102,21 +123,31 @@ func SaveParsedRecipe(ctx context.Context, title string,  userID int, parsed *Re
         	}
     	}
 
-	return nil
+	if jobID != 0 {
+		_, err = tx.Exec(ctx,
+			`UPDATE recipe_jobs SET parsed = TRUE, updated_at = NOW() WHERE id = $1`,
+			jobID,
+		)
+		if err != nil {
+			return fmt.Errorf("mark recipe_job %d parsed: %w", jobID, err)
+		}
+	}
+
+	return tx.Commit(ctx)
 }
 
 
 func GetAllRecipes(ctx context.Context, userID int) ([]RecipeResponse, error) {
     rows, err := db.Pool.Query(ctx, `
-        SELECT r.id, r.title, r.steps, 
-            json_agg(json_build_object(
+        SELECT r.id, r.title, r.steps, r.step_ingredients,
+            COALESCE(json_agg(json_build_object(
                 'name', i.name, 
-               'amount', ri.amount,
-               'alt_amount', ri.alt_amount,
-               'preparation_notes', ri.prep_notes,
+                'amount', ri.amount,
+                'alt_amount', ri.alt_amount,
+                'preparation_notes', ri.prep_notes,
 	            'ingredient_id', i.id,
 	            'recipe_ingredient_id', ri.id
-            )) as ingredients
+            ) ORDER BY ri.id) FILTER (WHERE ri.id IS NOT NULL), '[]') as ingredients
         FROM recipes r
         LEFT JOIN recipe_ingredient ri ON r.id = ri.recipe_id
 	    LEFT JOIN ingredients i on ri.ingredient_id = i.id
@@ -132,15 +163,24 @@ func GetAllRecipes(ctx context.Context, userID int) ([]RecipeResponse, error) {
     for rows.Next() {
         var r RecipeResponse
         var stepsBytes []byte
+        var stepIngredientsStr *string
         var ingredientsBytes []byte
 
-        if err := rows.Scan(&r.ID, &r.Title, &stepsBytes, &ingredientsBytes); err != nil {
+        if err := rows.Scan(&r.ID, &r.Title, &stepsBytes, &stepIngredientsStr, &ingredientsBytes); err != nil {
             return nil, err
         }
 
         if err := json.Unmarshal(stepsBytes, &r.Steps); err != nil {
             return nil, err
         }
+
+        // dont fail the return if stepIngredient fails 
+        if stepIngredientsStr != nil {
+            if err := json.Unmarshal([]byte(*stepIngredientsStr), &r.StepIngredients); err != nil {
+                log.Printf("recipe %d: bad step_ingredients json: %v", r.ID, err)
+            }
+        }
+
         if err := json.Unmarshal(ingredientsBytes, &r.Ingredients); err != nil {
             return nil, err
         }
@@ -152,62 +192,60 @@ func GetAllRecipes(ctx context.Context, userID int) ([]RecipeResponse, error) {
 }
 
 func UpdateRecipe(ctx context.Context, recipeID int, req models.UpdateRecipeRequest) error {
+    tx, err := db.Pool.Begin(ctx)
+    if err != nil {
+        return err
+    }
+    defer tx.Rollback(ctx) // no-op once Commit succeeds
+
     var stepsJSON string
-    err := db.Pool.QueryRow(ctx,
-        `SELECT steps FROM recipes WHERE id = $1`,
+    var stepIngredientsStr *string
+    err = tx.QueryRow(ctx,
+        `SELECT steps, step_ingredients FROM recipes WHERE id = $1`,
         recipeID,
-    ).Scan(&stepsJSON)
+    ).Scan(&stepsJSON, &stepIngredientsStr)
 
     if err != nil {
         return fmt.Errorf("failed to load recipe: %w", err)
     }
-
 
     var steps map[string][]string
     if err := json.Unmarshal([]byte(stepsJSON), &steps); err != nil {
         return fmt.Errorf("invalid steps json: %w", err)
     }
 
+    var stepIngredients map[string]map[string][]StepIngredient
+    if stepIngredientsStr != nil {
+        if err := json.Unmarshal([]byte(*stepIngredientsStr), &stepIngredients); err != nil {
+            log.Printf("recipe %d: bad step_ingredients json, leaving untouched: %v", recipeID, err)
+            stepIngredients = nil
+        }
+    }
+    stepIngredientsChanged := false
+
     for _, stepUpdate := range req.UpdatedSteps {
-    	key := stepUpdate.StepName
-	if key == "" {
-		continue
-	}
+        key := stepUpdate.StepName
+        if key == "" {
+            continue
+        }
 
-	newStepLines := cleanStepLines(stepUpdate.NewSteps)
-
-	steps[key] = newStepLines
+        steps[key] = cleanStepLines(stepUpdate.NewSteps)
     }
-
-    updatedStepsJSON, err := json.Marshal(steps)
-    if err != nil {
-    	return fmt.Errorf("failed to marshal steps json: %w", err)
-    }
-
-    _, err = db.Pool.Exec(ctx,
-    	`UPDATE recipes SET steps = $1 WHERE id = $2`,
-    	string(updatedStepsJSON), recipeID,
-    )
-
-    if err != nil {
-    	return fmt.Errorf("failed updating recipe steps: %w", err)
-    }
-
 
     for _, ing := range req.UpdatedIngredients {
 
         // 1. Get the current ingredient info to detect what changed
         var currentName, currentAmount, currentNotes string
 
-        err := db.Pool.QueryRow(ctx,
-            `SELECT i.name, ri.amount, ri.prep_notes
+        err := tx.QueryRow(ctx,
+            `SELECT i.name, COALESCE(ri.amount, ''), COALESCE(ri.prep_notes, '')
              FROM recipe_ingredient ri
              JOIN ingredients i ON ri.ingredient_id = i.id
-             WHERE ri.id = $1`,
-            ing.RecipeIngredientID,
+             WHERE ri.id = $1 AND ri.recipe_id = $2`,
+            ing.RecipeIngredientID, recipeID,
         ).Scan(&currentName, &currentAmount, &currentNotes)
         if err != nil {
-            return fmt.Errorf("fetch existing recipe ingredient: %w", err)
+            return fmt.Errorf("fetch existing recipe ingredient %d: %w", ing.RecipeIngredientID, err)
         }
 
         // --------------------------------
@@ -215,7 +253,7 @@ func UpdateRecipe(ctx context.Context, recipeID int, req models.UpdateRecipeRequ
         // --------------------------------
         if ing.Name == currentName {
             if ing.Amount != currentAmount || ing.PreparationNotes != currentNotes {
-                _, err := db.Pool.Exec(ctx,
+                _, err := tx.Exec(ctx,
                     `UPDATE recipe_ingredient
                      SET amount = $1, prep_notes = $2
                      WHERE id = $3`,
@@ -224,65 +262,94 @@ func UpdateRecipe(ctx context.Context, recipeID int, req models.UpdateRecipeRequ
                 if err != nil {
                     return fmt.Errorf("update recipe_ingredient: %w", err)
                 }
-		        log.Println("Updating recipe ingredient:", ing.Name)
             }
             continue
         }
 
         // --------------------------------
-        // Case B: Ingredient NAME changed → full replace logic
+        // Case B: Ingredient NAME changed → re-point the existing row
         // --------------------------------
 
-        // 1. Delete old recipe_ingredient row
-	    log.Println("NEW NAME DELETING RECIPE INGRED", ing.Name)
-        _, err = db.Pool.Exec(ctx,
-            `DELETE FROM recipe_ingredient WHERE id = $1`,
-            ing.RecipeIngredientID,
-        )
-        if err != nil {
-            return fmt.Errorf("delete old recipe_ingredient: %w", err)
-        }
-
-        // 2. Check if ingredient with new name already exists
+        // 1. Find or create the ingredient with the new name
         var newIngredientID int
-        err = db.Pool.QueryRow(ctx,
+        err = tx.QueryRow(ctx,
             `SELECT id FROM ingredients WHERE LOWER(name) = LOWER($1)`,
             ing.Name,
         ).Scan(&newIngredientID)
 
-	    log.Println("DOES INGREDIENT ALREADY EXIST:", newIngredientID)
-	    if err != nil {
-            if errors.Is(err, pgx.ErrNoRows) {
-		        log.Println("INGREDIENT DOESNT EXIST CREATING IT")
-                // Create new ingredient
-                err = db.Pool.QueryRow(ctx,
-                    `INSERT INTO ingredients (name)
-                    VALUES ($1) RETURNING id`,
-                    ing.Name,
-                ).Scan(&newIngredientID)
-
-                if err != nil {
-                    return fmt.Errorf("create new ingredient: %w", err)
-                }
-            } else {
-                return fmt.Errorf("fetch ingredient: %w", err)
+        if errors.Is(err, pgx.ErrNoRows) {
+            err = tx.QueryRow(ctx,
+                `INSERT INTO ingredients (name)
+                 VALUES ($1) RETURNING id`,
+                ing.Name,
+            ).Scan(&newIngredientID)
+            if err != nil {
+                return fmt.Errorf("create new ingredient: %w", err)
             }
+        } else if err != nil {
+            return fmt.Errorf("fetch ingredient: %w", err)
         }
 
-        // 4. Create new recipe_ingredient linking recipe + new ingredient
-        _, err = db.Pool.Exec(ctx,
-            `INSERT INTO recipe_ingredient
-                (recipe_id, ingredient_id, amount, prep_notes)
-             VALUES ($1, $2, $3, $4)`,
-            recipeID, newIngredientID, ing.Amount, ing.PreparationNotes,
+        // 2. Update the existing row in place: keeps its id (ordering) and alt_amount.
+        _, err = tx.Exec(ctx,
+            `UPDATE recipe_ingredient
+             SET ingredient_id = $1, amount = $2, prep_notes = $3
+             WHERE id = $4 AND recipe_id = $5`,
+            newIngredientID, ing.Amount, ing.PreparationNotes, ing.RecipeIngredientID, recipeID,
         )
         if err != nil {
-            return fmt.Errorf("create new recipe_ingredient: %w", err)
+            return fmt.Errorf("update recipe_ingredient: %w", err)
         }
-	    log.Println("DONE")
+
+        // 3. Keep step_ingredients pointing at the renamed ingredient
+        if renameStepIngredient(stepIngredients, currentName, ing.Name) {
+            stepIngredientsChanged = true
+        }
     }
 
-    return nil
+    updatedStepsJSON, err := json.Marshal(steps)
+    if err != nil {
+        return fmt.Errorf("failed to marshal steps json: %w", err)
+    }
+
+    if stepIngredientsChanged {
+        b, err := json.Marshal(stepIngredients)
+        if err != nil {
+            return fmt.Errorf("failed to marshal step_ingredients json: %w", err)
+        }
+        _, err = tx.Exec(ctx,
+            `UPDATE recipes SET steps = $1, step_ingredients = $2 WHERE id = $3`,
+            string(updatedStepsJSON), string(b), recipeID,
+        )
+    } else {
+        _, err = tx.Exec(ctx,
+            `UPDATE recipes SET steps = $1 WHERE id = $2`,
+            string(updatedStepsJSON), recipeID,
+        )
+    }
+    if err != nil {
+        return fmt.Errorf("failed updating recipe steps: %w", err)
+    }
+
+    return tx.Commit(ctx)
+}
+
+// renameStepIngredient renames every step_ingredients entry matching oldName
+// (case-insensitive). Returns true if anything changed.
+func renameStepIngredient(stepIngredients map[string]map[string][]StepIngredient, oldName, newName string) bool {
+    changed := false
+    old := strings.ToLower(strings.TrimSpace(oldName))
+    for _, byStep := range stepIngredients {
+        for _, used := range byStep {
+            for i := range used {
+                if strings.ToLower(strings.TrimSpace(used[i].Name)) == old {
+                    used[i].Name = newName
+                    changed = true
+                }
+            }
+        }
+    }
+    return changed
 }
 
 func DeleteRecipe(ctx context.Context, recipeID int, userID int) error {
@@ -316,16 +383,31 @@ func CreateRecipeJob(ctx context.Context, job models.RecipeJob) (int, error) {
     return jobID, nil
 }
 
-func MarkRecipeJobParsed(ctx context.Context, jobID int) error {
+func SaveRecipeJobParsedJSON(ctx context.Context, jobID int, parsedJSON []byte) error {
     _, err := db.Pool.Exec(ctx,
         `UPDATE recipe_jobs
-         SET parsed = TRUE
+         SET parsed_json = $1, updated_at = NOW()
+         WHERE id = $2`,
+        parsedJSON, jobID,
+    )
+
+    if err != nil {
+        log.Println("Failed to save recipe_job parsed json:", err)
+    }
+
+    return err
+}
+
+func IncrementRecipeJobFailCount(ctx context.Context, jobID int) error {
+    _, err := db.Pool.Exec(ctx,
+        `UPDATE recipe_jobs
+         SET fail_count = fail_count + 1, updated_at = NOW()
          WHERE id = $1`,
         jobID,
     )
 
     if err != nil {
-        log.Println("Failed to update recipe_job:", err)
+        log.Println("Failed to increment recipe_job fail_count:", err)
     }
 
     return err
@@ -333,9 +415,10 @@ func MarkRecipeJobParsed(ctx context.Context, jobID int) error {
 
 func LoadUnparsedRecipeJobs(ctx context.Context) (error) {
     rows, err := db.Pool.Query(ctx,
-        `SELECT id, title, text, images, type, user_id 
-         FROM recipe_jobs 
-         WHERE parsed = FALSE`,
+        `SELECT id, title, text, images, type, user_id, parsed_json
+         FROM recipe_jobs
+         WHERE parsed = FALSE AND fail_count < $1`,
+        MaxRecipeJobFailures,
     )
     if err != nil {
         return err
@@ -347,7 +430,7 @@ func LoadUnparsedRecipeJobs(ctx context.Context) (error) {
     for rows.Next() {
         var job models.RecipeJob
         var imagesJSON []byte
-	    if err := rows.Scan(&job.ID, &job.Name, &job.Text, &imagesJSON, &job.Type, &job.User_id); err != nil {
+	    if err := rows.Scan(&job.ID, &job.Name, &job.Text, &imagesJSON, &job.Type, &job.User_id, &job.ParsedJSON); err != nil {
             return err
         }
         if len(imagesJSON) > 0 {
