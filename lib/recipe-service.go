@@ -16,6 +16,7 @@ import (
 type ParsedIngredient struct {
     Name             	string `json:"name"`
     Amount           	string `json:"amount"`
+    AltAmount           string `json:"alt_amount"`
     PreparationNotes 	string `json:"preparation_notes"`
     IngredientId     	int `json:"ingredient_id"`
     RecipeIngredientId	int `json:"recipe_ingredient_id"`
@@ -110,7 +111,8 @@ func GetAllRecipes(ctx context.Context, userID int) ([]RecipeResponse, error) {
         SELECT r.id, r.title, r.steps, 
             json_agg(json_build_object(
                 'name', i.name, 
-               'amount', ri.amount, 
+               'amount', ri.amount,
+               'alt_amount', ri.alt_amount,
                'preparation_notes', ri.prep_notes,
 	            'ingredient_id', i.id,
 	            'recipe_ingredient_id', ri.id

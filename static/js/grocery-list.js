@@ -1,19 +1,3 @@
-// ---------------------------------------------------------------------------
-// Amount combining
-//
-// Only combines within a compatible unit family (volume-with-volume,
-// weight-with-weight, bare count-with-count). Cross-family combining (e.g.
-// "2 cups flour" + "200g flour") is NOT attempted - that needs ingredient-
-// specific density data we don't have. Unparseable or incompatible amounts
-// show up as raw leftover lines instead of being silently dropped or
-// wrongly merged.
-// ---------------------------------------------------------------------------
-
-// Keyed by parse-ingredient's unitOfMeasureID (with normalizeUOM: true).
-// CONFIRMED against the library's own docs: 'cup', 'teaspoon'.
-// The rest are inferred from naming convention, NOT independently verified -
-// cross-check against `Object.keys(ParseIngredient.unitsOfMeasure)` in the
-// console before relying on units beyond cup/teaspoon.
 const SHOPPING_LIST_UNIT_INFO = {
 	teaspoon: { key: 'volume', toBase: 4.92892 },
 	tablespoon: { key: 'volume', toBase: 14.7868 },
@@ -45,8 +29,7 @@ function formatBaseQuantity(key, baseQty) {
 // parseShoppingAmount parses one Amount string - including compound amounts
 // like "¾ cup plus 1 tablespoon" - into base-unit totals per family key.
 // Returns null if any chunk can't be confidently parsed or uses a unit not
-// in SHOPPING_LIST_UNIT_INFO: a partial parse is worse than none, since it
-// would silently under-count a real amount.
+// in SHOPPING_LIST_UNIT_INFO
 function parseShoppingAmount(raw) {
 	const trimmed = (raw || '').trim();
 	if (!trimmed) return null;
@@ -54,18 +37,25 @@ function parseShoppingAmount(raw) {
 	const totals = {};
 
 	for (const chunk of trimmed.split(' plus ')) {
-		const results = ParseIngredient.parseIngredient(chunk.trim(), { normalizeUOM: true });
+		const results = ParseIngredient.parseIngredient(chunk.trim() + ' flour', { normalizeUOM: true });
 		const parsed = results[0];
 		if (!parsed || parsed.quantity == null) return null;
 
 		if (parsed.unitOfMeasureID == null) {
+			console.log('no measureID', chunk)
+			console.log('checking unitOfMeasure: ', parsed.unitOfMeasure)
 			// No unit recognized -> treat as a bare count, e.g. "3" (for "3 eggs").
 			totals.count = (totals.count ?? 0) + parsed.quantity;
 			continue;
 		}
 
 		const info = SHOPPING_LIST_UNIT_INFO[parsed.unitOfMeasureID];
-		if (!info) return null; // unrecognized unit - don't guess, fall back to leftover
+		if (!info) {
+			console.warn(
+				`shopping-list: unrecognized unit "${parsed.unitOfMeasureID}" (from "${chunk}") - add it to SHOPPING_LIST_UNIT_INFO`
+			);
+			return null;
+		}
 
 		totals[info.key] = (totals[info.key] ?? 0) + parsed.quantity * info.toBase;
 	}

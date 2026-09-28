@@ -782,7 +782,7 @@ function createRecipeModal(card, recipe) {
     const ingredientsList = modal.querySelector('.ingredientsList');
     recipe.ingredients.forEach(ing => {
         const li = document.createElement('li');
-        li.textContent = `${ing.amount} ${ing.name} ${ing.preparation_notes || ''}`.trim();
+        li.textContent = `${ing.amount} ${ing.alt_amount? '(' + ing.alt_amount + ') ' : ''}${ing.name} ${ing.preparation_notes || ''}`.trim();
         ingredientsList.appendChild(li);
     });
 
