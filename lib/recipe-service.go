@@ -114,6 +114,8 @@ func SaveParsedRecipe(ctx context.Context, title string,  userID int, parsed *Re
         	    if err != nil {
         	        return err
         	    }
+        	} else if err != nil {
+        	    return fmt.Errorf("fetch ingredient %q: %w", ing.Name, err)
         	}
 
         	// Link recipe + ingredient
@@ -164,7 +166,8 @@ func GetAllRecipes(ctx context.Context, userID int) ([]RecipeResponse, error) {
     }
     defer rows.Close()
 
-    var recipes []RecipeResponse
+    // empty slice (not nil) so a user with no recipes gets [] rather than null
+    recipes := []RecipeResponse{}
     for rows.Next() {
         var r RecipeResponse
         var stepsBytes []byte
@@ -192,11 +195,18 @@ func GetAllRecipes(ctx context.Context, userID int) ([]RecipeResponse, error) {
 
         recipes = append(recipes, r)
     }
+    if err := rows.Err(); err != nil {
+        return nil, err
+    }
 
     return recipes, nil
 }
 
-func UpdateRecipe(ctx context.Context, recipeID int, req models.UpdateRecipeRequest) error {
+// ErrRecipeNotFound is returned when a recipe doesn't exist or doesn't belong to the user.
+var ErrRecipeNotFound = errors.New("recipe not found")
+
+// UpdateRecipe applies step and ingredient edits to a recipe owned by userID.
+func UpdateRecipe(ctx context.Context, recipeID int, userID int, req models.UpdateRecipeRequest) error {
     tx, err := db.Pool.Begin(ctx)
     if err != nil {
         return err
@@ -206,10 +216,13 @@ func UpdateRecipe(ctx context.Context, recipeID int, req models.UpdateRecipeRequ
     var stepsJSON string
     var stepIngredientsStr *string
     err = tx.QueryRow(ctx,
-        `SELECT steps, step_ingredients FROM recipes WHERE id = $1`,
-        recipeID,
+        `SELECT steps, step_ingredients FROM recipes WHERE id = $1 AND user_id = $2 FOR UPDATE`,
+        recipeID, userID,
     ).Scan(&stepsJSON, &stepIngredientsStr)
 
+    if errors.Is(err, pgx.ErrNoRows) {
+        return ErrRecipeNotFound
+    }
     if err != nil {
         return fmt.Errorf("failed to load recipe: %w", err)
     }

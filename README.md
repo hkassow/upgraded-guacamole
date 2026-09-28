@@ -7,33 +7,42 @@ docker compose up --build
 
 docker compose down
 
+`127.0.0.1:8443`
+
+# Backend tests
+scripts/test-backend.sh
+
+scripts/test-backend.sh -v -run TestUpdateRecipe
+
+- needs the db container running (`docker compose up -d db`)
+- runs against a separate `guac_test` database (created automatically), never the real `guac` one
+- DeepInfra is replaced by a fake server, so tests never call the real API
+- plain `go test ./...` still runs the non-database tests and skips the rest
+
 # Production
 upgraded-guacamole.com
 
-# Access db
-docker exec -it guac psql -U postgres -d guac
+- running locally on raspberry pi with cloudflare tunnel
 
 ## project todo 
 - update recipe edit flow
     - editing other users recipes -> for followers etc
     - add + remove ingredients improved flow
+
 - add alternative measurements in grocery list (cups -> grams etc)
-    - maintain list
+    - maintain list of density for conversion
         1. things that dont need to be seperated out (eggs)
         2. things that should be in ML ie; liquids, milk, cream etc
         3. things that should be in grams ie; butter, flour, sugar
-- on frontend when adding recipe steps if there is ever XXX°F add celsius conversion or `375 degrees`
     - dont do if followed by celsius conversion
 - continue testing deepinfra
     - maybe we can use a smarter/ more expensive text model for better parsing ?
-- fix model interperting ingredients needed from recipe list
-    - see matcha & red bean recipe
-
 
 - filter recipe types
     - your recipes
     - recipes of people you follow
     - show all recipes
+    - show recipes with certain ingredients
     - allow tagging recipes for further filtering
         - vegan
         - vegetarian
@@ -91,12 +100,7 @@ docker exec -it guac psql -U postgres -d guac
     -> could use for manually adding ingredients to recipe as well
 - add a season json so produce can be given season automattically
 - show seasonal recipes (list ingredients by season, get current in season stuff?)
-- allow recipes to have multiple ingredient sections
-    -> add db row to ingredient for grouping
+- allow adding images to recipes
 
 # grocery list
-- for grocery list group same named ingredient with amount next to each other 
 - allow adding items multiple times
-
-# unsure
-- allow listing ingredients without tags

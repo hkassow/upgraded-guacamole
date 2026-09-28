@@ -2,6 +2,7 @@ package handlers
 
 import (
     "encoding/json"
+    "errors"
     "net/http"
 	"log"
 
@@ -100,7 +101,7 @@ func handlePostRecipe(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
-	log.Printf("Incoming /recipes request - Name: %s, User: %s, Type: %s, Method: %s\n", rawRecipe.Name, userID, rawRecipe.Type, r.ContentLength)
+	log.Printf("Incoming /recipes request - Name: %s, User: %d, Type: %s, ContentLength: %d\n", rawRecipe.Name, userID, rawRecipe.Type, r.ContentLength)
 
 
 	if rawRecipe.Type == "manual" {
@@ -118,23 +119,31 @@ func handlePostRecipe(w http.ResponseWriter, r *http.Request) {
     	    		"message": "Recipe created",
     		})
 	} else if rawRecipe.Type == "text" {
-
-		lib.RecipeQueue <- models.RecipeJob{
+		err := lib.QueueRecipeJob(r.Context(), models.RecipeJob{
 			Name: rawRecipe.Name,
 			Text: rawRecipe.Text,
+			Type: "text",
 			User_id: userID,
+		})
+		if err != nil {
+			http.Error(w, "Failed to queue recipe", http.StatusInternalServerError)
+			return
 		}
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(map[string]string{
     	    		"message": "Recipe queued to be parsed",
     		})
 	} else if rawRecipe.Type == "image" {
-		lib.RecipeQueue <- models.RecipeJob{
+		err := lib.QueueRecipeJob(r.Context(), models.RecipeJob{
     	    	Name:    rawRecipe.Name,
         		Images:   rawRecipe.Images,
         		Type:    "image",
         		User_id: userID,
-    		}
+    		})
+		if err != nil {
+			http.Error(w, "Failed to queue recipe", http.StatusInternalServerError)
+			return
+		}
     		w.WriteHeader(http.StatusCreated)
     		json.NewEncoder(w).Encode(map[string]string{
         		"message": "Recipe image queued to be parsed",
@@ -149,8 +158,18 @@ func handlePatchRecipe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := r.Context()	
-	err := lib.UpdateRecipe(ctx, updateReq.RecipeID, updateReq)
+	userID := lib.GetUserID(r, store)
+	if userID == 0 {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	ctx := r.Context()
+	err := lib.UpdateRecipe(ctx, updateReq.RecipeID, userID, updateReq)
+	if errors.Is(err, lib.ErrRecipeNotFound) {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

@@ -16,9 +16,10 @@ import (
 	"go-guacamole/models"
 )
 
+// var (not const) so tests can point it at a fake server
+var deepInfraChatURL = "https://api.deepinfra.com/v1/openai/chat/completions"
+
 const (
-	deepInfraChatURL = "https://api.deepinfra.com/v1/openai/chat/completions"
- 
 	deepInfraTextModel = "Qwen/Qwen3-235B-A22B-Instruct-2507" // .09 in .55 out
 	//deepInfraTextModel = "Qwen/Qwen3-32B"				 // .08 in .28 out
  
@@ -347,7 +348,12 @@ type diChatResponse struct {
 		Message struct {
 			Content string `json:"content"`
 		} `json:"message"`
+		FinishReason string `json:"finish_reason"` // "length" means the reply was cut off
 	} `json:"choices"`
+	Usage *struct {
+		PromptTokens     int `json:"prompt_tokens"`
+		CompletionTokens int `json:"completion_tokens"`
+	} `json:"usage,omitempty"`
 	Error *struct {
 		Message string `json:"message"`
 	} `json:"error,omitempty"`
@@ -470,9 +476,13 @@ func ParseRecipeImageCall(images []string) (*RecipeParsed, error) {
 	return callParserEndpoint(path, body)
 }
 
+// The request isn't streamed, so DeepInfra only responds once the whole reply is generated. Long
+// recipes (with ingredients_used_for_step) can take well over 2 minutes on the 235B models.
+const deepInfraTimeout = 5 * time.Minute
+
 func deepInfraHTTPClient() *http.Client {
 	return &http.Client{
-		Timeout: 120 * time.Second,
+		Timeout: deepInfraTimeout,
 	}
 }
 
@@ -494,9 +504,11 @@ func callDeepInfra(req diChatRequest) (string, error) {
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+apiKey)
  
+	start := time.Now()
 	resp, err := deepInfraHTTPClient().Do(httpReq)
 	if err != nil {
-		return "", fmt.Errorf("deepinfra request failed: %w", err)
+		return "", fmt.Errorf("deepinfra request failed after %s (timeout %s): %w",
+			time.Since(start).Round(time.Second), deepInfraTimeout, err)
 	}
 	defer resp.Body.Close()
  
@@ -520,8 +532,20 @@ func callDeepInfra(req diChatRequest) (string, error) {
 	if len(wrapper.Choices) == 0 {
 		return "", fmt.Errorf("deepinfra returned no choices (raw: %s)", string(data))
 	}
- 
-	return wrapper.Choices[0].Message.Content, nil
+
+	// log how long calls take so the timeout can be tuned against real recipes
+	choice := wrapper.Choices[0]
+	usage := "unknown"
+	if wrapper.Usage != nil {
+		usage = fmt.Sprintf("%d prompt + %d completion", wrapper.Usage.PromptTokens, wrapper.Usage.CompletionTokens)
+	}
+	log.Printf("deepinfra: %s took %s (tokens: %s, finish_reason: %q)",
+		req.Model, time.Since(start).Round(time.Second), usage, choice.FinishReason)
+	if choice.FinishReason == "length" {
+		log.Printf("deepinfra: %s reply was cut off at the token limit, the recipe JSON is probably incomplete", req.Model)
+	}
+
+	return choice.Message.Content, nil
 }
 
 func extractRecipeJSON(rawText string) (*RecipeParsed, error) {
@@ -746,62 +770,81 @@ func cachedRecipeParse(jobID int, raw []byte) *RecipeParsed {
 	return parsed
 }
 
+// QueueRecipeJob saves the job to recipe_jobs and then hands it to the worker. Saving first means a
+// job still waiting in the queue isn't lost if the server restarts - LoadUnparsedRecipeJobs picks it
+// back up on startup.
+func QueueRecipeJob(ctx context.Context, job models.RecipeJob) error {
+	jobID, err := CreateRecipeJob(ctx, job)
+	if err != nil {
+		return err
+	}
+	job.ID = jobID
+
+	RecipeQueue <- job
+	return nil
+}
+
 func StartRecipeWorker() {
     go func() {
         for job := range RecipeQueue {
-            log.Println("Processing recipe:", job.Name)
-
-            ctx := context.Background()
-
-            jobID := job.ID
-            if jobID == 0 {
-                var err error
-                jobID, err = CreateRecipeJob(ctx, job)
-                if err != nil {
-					log.Println("Error creating recipe job:", err)
-                    continue
-                }
-            }
-
-            // reuse the model's output from a previous attempt instead of paying for another call
-            parsed := cachedRecipeParse(jobID, job.ParsedJSON)
-            if parsed != nil {
-                log.Println("Reusing stored parse result for recipe:", job.Name)
-            } else {
-                var err error
-
-                switch job.Type {
-                case "image":
-                    //parsed, err = ParseRecipeImageCall(job.Images)
-                    parsed, err = ParseRecipeImageCallDeepInfra(job.Images)
-                default: // "text"
-                    //parsed, err = ParseRecipeCall(job.Text)
-                    parsed, err = ParseRecipeCallDeepInfra(job.Text)
-                }
-
-                if err == nil && !parsed.usable() {
-                    err = fmt.Errorf("model returned no steps or ingredients")
-                }
-                if err != nil {
-                    log.Println("Error parsing recipe:", err)
-                    _ = IncrementRecipeJobFailCount(ctx, jobID)
-                    continue
-                }
-
-                if parsedJSON, err := json.Marshal(parsed); err == nil {
-                    _ = SaveRecipeJobParsedJSON(ctx, jobID, parsedJSON)
-                } else {
-                    log.Println("Error marshaling parsed recipe:", err)
-                }
-            }
-
-            if err := SaveParsedRecipe(ctx, job.Name, job.User_id, parsed, jobID); err != nil {
-                log.Println("Error saving recipe:", err)
-                _ = IncrementRecipeJobFailCount(ctx, jobID)
+            if err := ProcessRecipeJob(context.Background(), job); err != nil {
+                log.Printf("Recipe job %q failed: %v", job.Name, err)
                 continue
             }
-
             log.Println("Recipe saved successfully:", job.Name)
         }
     }()
+}
+
+// ProcessRecipeJob parses one queued recipe (reusing a stored parse result if there is one) and saves
+// it. Failures bump the job's fail_count so it stops being retried after MaxRecipeJobFailures.
+func ProcessRecipeJob(ctx context.Context, job models.RecipeJob) error {
+    log.Println("Processing recipe:", job.Name)
+
+    jobID := job.ID
+    if jobID == 0 {
+        var err error
+        jobID, err = CreateRecipeJob(ctx, job)
+        if err != nil {
+            return fmt.Errorf("creating recipe job: %w", err)
+        }
+    }
+
+    // reuse the model's output from a previous attempt instead of paying for another call
+    parsed := cachedRecipeParse(jobID, job.ParsedJSON)
+    if parsed != nil {
+        log.Println("Reusing stored parse result for recipe:", job.Name)
+    } else {
+        var err error
+
+        switch job.Type {
+        case "image":
+            //parsed, err = ParseRecipeImageCall(job.Images)
+            parsed, err = ParseRecipeImageCallDeepInfra(job.Images)
+        default: // "text"
+            //parsed, err = ParseRecipeCall(job.Text)
+            parsed, err = ParseRecipeCallDeepInfra(job.Text)
+        }
+
+        if err == nil && !parsed.usable() {
+            err = fmt.Errorf("model returned no steps or ingredients")
+        }
+        if err != nil {
+            _ = IncrementRecipeJobFailCount(ctx, jobID)
+            return fmt.Errorf("parsing recipe: %w", err)
+        }
+
+        if parsedJSON, err := json.Marshal(parsed); err == nil {
+            _ = SaveRecipeJobParsedJSON(ctx, jobID, parsedJSON)
+        } else {
+            log.Println("Error marshaling parsed recipe:", err)
+        }
+    }
+
+    if err := SaveParsedRecipe(ctx, job.Name, job.User_id, parsed, jobID); err != nil {
+        _ = IncrementRecipeJobFailCount(ctx, jobID)
+        return fmt.Errorf("saving recipe: %w", err)
+    }
+
+    return nil
 }

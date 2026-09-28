@@ -403,32 +403,59 @@ async function fetchIngredients() {
 
 }
 
+const PARSING_QUEUED_MESSAGE = 'Recipe is being parsed, it should show up in about 5 minutes';
+
+// Runs submit with the form's submit button disabled and showing a spinner, so a double click
+// (or pressing Enter twice) can't send the same recipe twice.
+async function withSubmitLock(form, loadingLabel, submit) {
+    if (form.dataset.submitting === 'true') return;
+    form.dataset.submitting = 'true';
+
+    const button = form.querySelector('button[type="submit"]');
+    const label = button.textContent;
+    button.disabled = true;
+    button.classList.add('is-loading');
+    button.textContent = loadingLabel;
+
+    try {
+        await submit();
+    } catch (err) {
+        console.error('Error saving recipe:', err);
+        showToast('Could not save the recipe, please try again');
+    } finally {
+        form.dataset.submitting = 'false';
+        button.classList.remove('is-loading');
+        button.textContent = label;
+        button.disabled = false;
+    }
+}
+
+async function postRecipe(newRecipe) {
+    const response = await fetch('/recipes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newRecipe),
+    });
+    if (!response.ok) throw new Error(`Failed to save recipe (${response.status}): ${await response.text()}`);
+}
+
 async function submitRecipeForm(event) {
     event.preventDefault();
     const recipeForm = document.getElementById('aiRecipeForm');
     const newRecipe = {
         name: document.getElementById('recipeName').value.trim(),
         text: document.getElementById('recipeDescription').value.trim(),
-        type: 'text'    
+        type: 'text'
     };
 
-    try {
+    await withSubmitLock(recipeForm, 'Saving...', async () => {
         console.log('Submitting new recipe:', newRecipe);
-        const response = await fetch('/recipes', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newRecipe),
-        });
-
-        if (!response.ok) throw new Error('Failed to save recipe');
+        await postRecipe(newRecipe);
 
         closeModal('recipeModal');
         recipeForm.reset();
-	
-	    showToast('Recipe queued to be parsed, please check back later');
-    } catch (err) {
-        console.error('Error saving recipe:', err);
-    }
+	    showToast(PARSING_QUEUED_MESSAGE);
+    });
 }
 
 async function submitManualRecipeForm(event) {
@@ -453,24 +480,15 @@ async function submitManualRecipeForm(event) {
         });
     });
 
-    try {
+    await withSubmitLock(recipeForm, 'Saving...', async () => {
         console.log('Submitting new recipe:', newRecipe);
-        const response = await fetch('/recipes', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newRecipe),
-        });
-
-        if (!response.ok) throw new Error('Failed to save recipe');
+        await postRecipe(newRecipe);
 
         fetchRecipes();
         closeModal('recipeModal');
         recipeForm.reset();
-
 	    showToast('Recipe added!');
-    } catch (err) {
-        console.error('Error saving recipe:', err);
-    }
+    });
 }
 
 function setImages(files) {
@@ -478,15 +496,19 @@ function setImages(files) {
     renderPreviews();
 }
 
+// shows/hides the image form's controls based on whether any photos are selected
+function updateImageFormState() {
+    const hasImages = selectedImageFiles.length > 0;
+    const uploading = document.getElementById('aiImageForm').dataset.submitting === 'true';
+    document.getElementById('imageDropPrompt').hidden = hasImages;
+    document.getElementById('clearImageBtn').hidden = !hasImages;
+    document.getElementById('submitImageBtn').disabled = !hasImages || uploading;
+}
+
 function renderPreviews() {
     const grid = document.getElementById('imagePreviewGrid');
-    const dropPrompt = document.getElementById('imageDropPrompt');
-    const clearBtn = document.getElementById('clearImageBtn');
-    const submitImageBtn = document.getElementById('submitImageBtn');
     grid.innerHTML = '';
-    dropPrompt.hidden = selectedImageFiles.length > 0;
-    submitImageBtn.disabled = selectedImageFiles.length === 0;
-    clearBtn.hidden = selectedImageFiles.length === 0;
+    updateImageFormState();
 
     selectedImageFiles.forEach((file, index) => {
         const reader = new FileReader();
@@ -530,40 +552,33 @@ function fileToBase64(file) {
 
 async function submitImageRecipeForm(event) {
     event.preventDefault();
-    if (!selectedImageFiles) return;
+    if (selectedImageFiles.length === 0) return;
 
     const recipeForm = document.getElementById('aiImageForm');
-
     const name = document.getElementById('imageRecipeName').value.trim();
-    const base64Images = await Promise.all(
-        selectedImageFiles.map(file => fileToBase64(file))
-    );
 
-    const newRecipe = {
-        name: name,
-        images: base64Images,
-        type: 'image'
-    };
+    // reading + uploading the photos is the slow part, so it all happens inside the lock
+    await withSubmitLock(recipeForm, 'Uploading...', async () => {
+        const base64Images = await Promise.all(
+            selectedImageFiles.map(file => fileToBase64(file))
+        );
 
-    try {
         console.log('Submitting new recipe image:', name);
-        const response = await fetch('/recipes', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newRecipe),
+        await postRecipe({
+            name: name,
+            images: base64Images,
+            type: 'image'
         });
 
-        if (!response.ok) throw new Error('Failed to save recipe');
-
         closeModal('recipeModal');
-        document.getElementById('aiImageForm').reset();
+        recipeForm.reset();
         selectedImageFiles = [];
         renderPreviews();
+        showToast(PARSING_QUEUED_MESSAGE);
+    });
 
-        showToast('Recipe queued to be parsed, please check back later');
-    } catch (err) {
-        console.error('Error saving recipe:', err);
-    }
+    // the lock re-enables the button; keep it disabled if there are no photos (e.g. after a successful save)
+    updateImageFormState();
 }
 
 function addIngredient() {

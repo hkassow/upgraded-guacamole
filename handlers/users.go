@@ -19,6 +19,10 @@ func FollowNewUser(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	followerID := lib.GetUserID(r, store)
+	if followerID == 0 {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	var req FollowUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
