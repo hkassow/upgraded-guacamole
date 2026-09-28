@@ -134,6 +134,53 @@ func TestSaveParsedRecipeNormalizesComponents(t *testing.T) {
 	}
 }
 
+func TestSaveParsedRecipeDropsUnknownStepIngredients(t *testing.T) {
+	ctx := testutil.SetupDB(t)
+	alice := testutil.CreateUser(t, ctx, "alice")
+
+	parsed := sampleParsed()
+	parsed.Steps["main"] = append(parsed.Steps["main"], "Brush with the sauce.")
+	parsed.IngredientsUsedForStep["main"]["1"] = append(parsed.IngredientsUsedForStep["main"]["1"],
+		StepIngredient{Name: "1 circle dough"})
+	parsed.IngredientsUsedForStep["main"]["3"] = []StepIngredient{{Name: "sauce", Amount: "all"}}
+
+	if err := SaveParsedRecipe(ctx, "Chicken", alice.ID, parsed, 0); err != nil {
+		t.Fatalf("SaveParsedRecipe: %v", err)
+	}
+
+	// check what was stored, not just what GetAllRecipes shows
+	var stored string
+	if err := db.Pool.QueryRow(ctx, `SELECT step_ingredients FROM recipes`).Scan(&stored); err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]map[string][]StepIngredient
+	if err := json.Unmarshal([]byte(stored), &got); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, sampleParsed().IngredientsUsedForStep) {
+		t.Errorf("stored step ingredients = %+v, want only real ingredients", got)
+	}
+}
+
+func TestGetAllRecipesHidesUnknownStepIngredients(t *testing.T) {
+	ctx := testutil.SetupDB(t)
+	alice := testutil.CreateUser(t, ctx, "alice")
+	r := saveSample(t, ctx, alice, "Chicken")
+
+	// a recipe saved before filtering existed
+	_, err := db.Pool.Exec(ctx, `UPDATE recipes SET step_ingredients = $1 WHERE id = $2`,
+		`{"main": {"1": [{"name": "Salt", "amount": "1 tsp"}, {"name": "remaining dough"}], "2": [{"name": "dough scraps"}]}}`, r.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	after := recipeByTitle(t, ctx, alice.ID, "Chicken")
+	want := map[string]map[string][]StepIngredient{"main": {"1": {{Name: "salt", Amount: "1 tsp"}}}}
+	if !reflect.DeepEqual(after.StepIngredients, want) {
+		t.Errorf("step ingredients = %+v, want %+v", after.StepIngredients, want)
+	}
+}
+
 func TestSaveParsedRecipeReusesIngredientsCaseInsensitively(t *testing.T) {
 	ctx := testutil.SetupDB(t)
 	alice := testutil.CreateUser(t, ctx, "alice")

@@ -170,8 +170,12 @@ and how much of each. It is keyed first by the same component keys as "steps" ("
 5. If an ingredient is used in more than one step (e.g. butter in step 1 and step 5),
    list it in each of those steps with that step's amount.
  
-6. Do NOT invent ingredients here. Every "name" must correspond to an ingredient that
-   exists in the "ingredients" list.
+6. Do NOT invent ingredients here. Every "name" must be copied from the "name" of an entry in
+   the "ingredients" list - nothing else is allowed.
+   - NEVER list things the recipe makes along the way: the dough, dough balls, dough circles,
+     scraps, cookie layers, the batter, a mixture, or another component such as "the whiskey
+     syrup" or "the cream filling". These are not ingredients - a step that only uses them
+     (e.g. "roll out one ball of dough", "brush with the whiskey syrup") gets NO key at all.
  
 Example - given ingredients "1½ cups sugar", "2 cups flour", "1 tsp vanilla extract",
 "3 eggs" and these steps:
@@ -771,6 +775,53 @@ func logStepIngredientIssues(parsed *RecipeParsed) {
 			}
 		}
 	}
+}
+
+// keepKnownStepIngredients removes step ingredients that aren't in the recipe's ingredient list -
+// the model sometimes lists things the recipe makes along the way ("dough", "1 circle dough",
+// "cream filling") - and matches the rest to the ingredient's exact name. Steps and sections left
+// empty are removed. Returns how many entries were dropped.
+func keepKnownStepIngredients(stepIngredients map[string]map[string][]StepIngredient, ingredientNames []string) int {
+	normalize := func(s string) string { return strings.ToLower(strings.TrimSpace(s)) }
+
+	known := make(map[string]string, len(ingredientNames))
+	for _, name := range ingredientNames {
+		known[normalize(name)] = name
+	}
+
+	dropped := 0
+	for component, byStep := range stepIngredients {
+		for step, used := range byStep {
+			kept := used[:0]
+			for _, u := range used {
+				name, ok := known[normalize(u.Name)]
+				if !ok {
+					dropped++
+					continue
+				}
+				u.Name = name
+				kept = append(kept, u)
+			}
+
+			if len(kept) == 0 {
+				delete(byStep, step)
+			} else {
+				byStep[step] = kept
+			}
+		}
+		if len(byStep) == 0 {
+			delete(stepIngredients, component)
+		}
+	}
+	return dropped
+}
+
+func ingredientNamesOf(ingredients []Ingredient) []string {
+	names := make([]string, len(ingredients))
+	for i, ing := range ingredients {
+		names[i] = ing.Name
+	}
+	return names
 }
 
 const defaultComponent = "main"

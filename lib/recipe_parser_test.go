@@ -81,6 +81,37 @@ func TestNormalizeIngredientComponentsManualRecipe(t *testing.T) {
 	}
 }
 
+func TestKeepKnownStepIngredients(t *testing.T) {
+	stepIngredients := map[string]map[string][]StepIngredient{
+		"main": {
+			"1": {{Name: "Honey", Amount: "scant ¾ cup"}, {Name: "granulated sugar", Amount: "½ cup"}},
+			"4": {{Name: "dough", Amount: "remaining"}},                               // only made things -> step removed
+			"5": {{Name: "1 ball dough"}, {Name: " honey ", Amount: "1 tbsp"}},        // mixed -> keep honey
+			"8": {{Name: "whiskey syrup", Amount: "2 tbsp"}, {Name: "cream filling"}}, // components -> step removed
+		},
+		"cream filling": {"1": {{Name: "dough scraps"}}}, // section left empty -> removed
+	}
+
+	dropped := keepKnownStepIngredients(stepIngredients, []string{"honey", "granulated sugar"})
+
+	want := map[string]map[string][]StepIngredient{
+		"main": {
+			"1": {{Name: "honey", Amount: "scant ¾ cup"}, {Name: "granulated sugar", Amount: "½ cup"}},
+			"5": {{Name: "honey", Amount: "1 tbsp"}},
+		},
+	}
+	if !reflect.DeepEqual(stepIngredients, want) {
+		t.Errorf("after filtering = %+v, want %+v", stepIngredients, want)
+	}
+	if dropped != 5 {
+		t.Errorf("dropped = %d, want 5", dropped)
+	}
+
+	if keepKnownStepIngredients(nil, []string{"honey"}) != 0 {
+		t.Error("nil map should drop nothing")
+	}
+}
+
 func TestRenameStepIngredient(t *testing.T) {
 	stepIngredients := map[string]map[string][]StepIngredient{
 		"main":  {"1": {{Name: "Butter", Amount: "1 tbsp"}, {Name: "flour", Amount: "1 cup"}}},

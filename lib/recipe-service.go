@@ -60,6 +60,9 @@ func SaveParsedRecipe(ctx context.Context, title string,  userID int, parsed *Re
 	pool := db.Pool
 
 	// covers model output, reused parsed_json from older runs, and manual recipes (all "main")
+	if dropped := keepKnownStepIngredients(parsed.IngredientsUsedForStep, ingredientNamesOf(parsed.Ingredients)); dropped > 0 {
+		log.Printf("recipe %q: dropped %d step ingredients that aren't in the ingredient list", title, dropped)
+	}
 	normalizeIngredientComponents(parsed)
 
 	steps, err := json.Marshal(parsed.Steps)
@@ -182,15 +185,27 @@ func GetAllRecipes(ctx context.Context, userID int) ([]RecipeResponse, error) {
             return nil, err
         }
 
-        // dont fail the return if stepIngredient fails 
+        if err := json.Unmarshal(ingredientsBytes, &r.Ingredients); err != nil {
+            return nil, err
+        }
+
+        // dont fail the return if stepIngredient fails
         if stepIngredientsStr != nil {
             if err := json.Unmarshal([]byte(*stepIngredientsStr), &r.StepIngredients); err != nil {
                 log.Printf("recipe %d: bad step_ingredients json: %v", r.ID, err)
+                r.StepIngredients = nil
             }
         }
 
-        if err := json.Unmarshal(ingredientsBytes, &r.Ingredients); err != nil {
-            return nil, err
+        // recipes saved before step ingredients were filtered on save can still list things
+        // like "dough"; only show ingredients that are actually in the recipe
+        names := make([]string, len(r.Ingredients))
+        for i, ing := range r.Ingredients {
+            names[i] = ing.Name
+        }
+        keepKnownStepIngredients(r.StepIngredients, names)
+        if len(r.StepIngredients) == 0 {
+            r.StepIngredients = nil
         }
 
         recipes = append(recipes, r)
