@@ -352,11 +352,12 @@ async function fetchRecipes() {
         if (!response.ok) throw new Error('HTTP ' + response.status);
 
         const recipes = await response.json();
-	
-        if (recipes.length) {
-		    recipes.sort((a,b) => { return b.title.toLowerCase() > a.title.toLowerCase() ? -1 : 1});
-        	global_recipes = Object.fromEntries(recipes.map(ing => [ing.id, ing]))
-        }
+
+        recipes.sort((a,b) => { return b.title.toLowerCase() > a.title.toLowerCase() ? -1 : 1});
+        global_recipes = Object.fromEntries(recipes.map(ing => [ing.id, ing]))
+
+        // modals from the previous render would otherwise pile up in the page
+        document.querySelectorAll('.recipe-view-modal').forEach(modal => modal.remove());
 
         responseDiv.className = '';
         responseDiv.textContent = ''; // clear loading text
@@ -367,18 +368,31 @@ async function fetchRecipes() {
             recipes.forEach(r => {
                 const card = document.createElement('div');
                 card.className = 'recipe-card';
-                card.innerHTML = `
-                    <h3>${r.title}</h3>
-                `;
+                const title = document.createElement('h3');
+                title.textContent = r.title;
+                card.appendChild(title);
+
+                // on your own list, say whose recipe it is when it's from someone you follow
+                if (!r.is_mine && r.owner_name && !recipesOf) {
+                    const owner = document.createElement('div');
+                    owner.className = 'recipe-owner';
+                    owner.textContent = `from ${r.owner_name}`;
+                    card.appendChild(owner);
+                }
+                const tags = createRecipeTagList(r.tags);
+                if (tags) card.appendChild(tags);
+
 		        card.dataset.id = r.id;
 		        responseDiv.appendChild(card);
 		        createRecipeModal(card, r)
             });
         }
+        renderRecipeFilters(recipes);
     } catch (error) {
 	    console.log(error);
         responseDiv.className = 'error';
         responseDiv.textContent = 'Error:\n' + error.message;
+        renderRecipeFilters([]);
     } finally {
         btn.disabled = false;
     }
@@ -639,18 +653,27 @@ async function deleteRecipe(id, modal) {
     }
 }
 
-async function submitRecipeChanges(id, updated_steps, updated_ingredients, modal) {
-    if (!updated_steps?.length && !updated_ingredients?.length) {
+// tags: the full new tag list, or null when the tags weren't changed
+async function submitRecipeChanges(id, updated_steps, updated_ingredients, tags, modal) {
+    if (!updated_steps?.length && !updated_ingredients?.length && tags === null) {
     	showToast('No changes were made to the recipe');
 	return;
     }
     try {
+        const body = {recipe_id: id, updated_steps, updated_ingredients};
+        if (tags !== null) body.tags = tags;
+
     	const response = await fetch('/recipes', {
 	    method: 'PATCH',
 	    headers: {'Content-Type': 'application/json' },
-	    body: JSON.stringify({recipe_id: id, updated_steps, updated_ingredients})
+	    body: JSON.stringify(body)
 	});
-	if (!response.ok) throw new Error('Failed to edit recipe');
+	if (!response.ok) {
+	    const message = (await response.text()).trim();
+	    // 400s explain what's wrong (e.g. a tag that's too long), show that to the user
+	    showToast(response.status === 400 && message ? message : 'Could not save your changes, please try again');
+	    throw new Error(`Failed to edit recipe (${response.status}): ${message}`);
+	}
 
 	fetchRecipes();
 	closeModal(modal);
@@ -729,6 +752,113 @@ function handleModalBackgroundClick(event, modalElement) {
     }
 }
 
+// suggested in the tag editor alongside any tag already used on a visible recipe
+const DEFAULT_TAGS = ['vegetarian', 'vegan', 'breakfast', 'lunch', 'dinner', 'dessert', 'baking', 'bread', 'snack', 'side'];
+const MAX_TAG_LENGTH = 30; // matches the server
+const MAX_TAGS_PER_RECIPE = 20;
+
+// same rules as lib.NormalizeTags on the server: "  #Quick   Dinner " -> "quick dinner"
+function normalizeTag(tag) {
+    return tag.trim().replace(/^#/, '').replace(/\s+/g, ' ').toLowerCase();
+}
+
+// small read-only chips, or null when there are no tags
+function createRecipeTagList(tags) {
+    if (!tags || !tags.length) return null;
+    const list = document.createElement('ul');
+    list.className = 'recipe-tags';
+    list.setAttribute('aria-label', 'Tags');
+    tags.forEach(tag => {
+        const item = document.createElement('li');
+        item.textContent = tag;
+        list.appendChild(item);
+    });
+    return list;
+}
+
+let tagEditorCount = 0;
+
+// Editable tag list for the edit form: chips with a remove button, and an input that adds a tag
+// on Enter or comma (with suggestions). getTags() also picks up anything still typed in the input.
+function createTagEditor(initialTags) {
+    let tags = [...initialTags];
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'tag-editor';
+
+    const list = document.createElement('ul');
+    list.className = 'recipe-tags';
+    list.setAttribute('aria-label', 'Tags');
+
+    const suggestions = document.createElement('datalist');
+    suggestions.id = `tagSuggestions${++tagEditorCount}`;
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = 'Add a tag, e.g. dinner';
+    input.setAttribute('aria-label', 'Add a tag');
+    input.maxLength = MAX_TAG_LENGTH;
+    input.setAttribute('list', suggestions.id);
+
+    function render() {
+        list.innerHTML = '';
+        tags.forEach(tag => {
+            const item = document.createElement('li');
+            item.textContent = tag;
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'tag-remove';
+            remove.textContent = '×';
+            remove.setAttribute('aria-label', `Remove tag ${tag}`);
+            remove.addEventListener('click', () => {
+                tags = tags.filter(t => t !== tag);
+                render();
+            });
+            item.appendChild(remove);
+            list.appendChild(item);
+        });
+
+        const known = new Set(DEFAULT_TAGS);
+        Object.values(global_recipes).forEach(r => (r.tags || []).forEach(t => known.add(t)));
+        suggestions.innerHTML = '';
+        [...known].filter(t => !tags.includes(t)).sort().forEach(t => {
+            const option = document.createElement('option');
+            option.value = t;
+            suggestions.appendChild(option);
+        });
+    }
+
+    function addFromInput() {
+        input.value.split(',').map(normalizeTag).filter(Boolean).forEach(tag => {
+            if (!tags.includes(tag) && tags.length < MAX_TAGS_PER_RECIPE) tags.push(tag);
+        });
+        input.value = '';
+        render();
+    }
+
+    input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ',') {
+            event.preventDefault();
+            addFromInput();
+        }
+    });
+    // picking a suggestion from the list adds it straight away
+    input.addEventListener('input', (event) => {
+        if (event.inputType === 'insertReplacementText' || event.inputType === undefined) addFromInput();
+    });
+
+    render();
+    wrapper.append(list, input, suggestions);
+
+    return {
+        element: wrapper,
+        getTags() {
+            if (input.value.trim()) addFromInput();
+            return [...tags];
+        },
+    };
+}
+
 // recipes saved before sections existed have no component, treat them as main
 function ingredientComponent(ing) {
     return ing.component || 'main';
@@ -783,28 +913,32 @@ function createStepItem(recipe, component, index, text) {
 
 function createRecipeModal(card, recipe) {
     const modal = document.createElement('div');
-    modal.className = 'modal';
+    modal.className = 'modal recipe-view-modal';
     modal.addEventListener('click', (e) => {
         if (e.target === modal) closeModal(modal);
     });
 
+    // only the owner can edit (the server also enforces this)
     modal.innerHTML = `
         <div class="modal-content recipe-modal">
             <span class="close">&times;</span>
-            <h2 style="text-transform: capitalize;">${recipe.title}</h2>
-	        ${user? `
+            <h2 class="recipe-modal-title" style="text-transform: capitalize;"></h2>
+	        ${recipe.is_mine ? `
                 <div class="button-container">
                     <br>
                     <button class="edit-recipe-btn" data-mode="view">Edit Recipe</button>
                     <button class="delete-recipe-btn" hidden>Delete Recipe</button>
-                </div>` 
+                </div>`
             : '' }
 	        <div class="viewRecipe">
+            	<div class="viewTags"></div>
             	<h3>Ingredients</h3>
             	<div class="ingredientsList"></div>
            	<div class="stepsContainer"></div>
 	    </div>
 	    <div class="editRecipe" style="display: none;">
+	        <h3>Tags</h3>
+	        <div class="editTags"></div>
 	        <h3>Edit Ingredients</h3>
 		<div class="editIngredientsList"></div>
 		<div class="editStepsContainer">
@@ -819,6 +953,14 @@ function createRecipeModal(card, recipe) {
 
     document.body.appendChild(modal);
 
+    // set as text, not HTML, so a title can't inject markup
+    modal.querySelector('.recipe-modal-title').textContent = recipe.title;
+    const viewTags = createRecipeTagList(recipe.tags);
+    if (viewTags) modal.querySelector('.viewTags').appendChild(viewTags);
+
+    const tagEditor = createTagEditor(recipe.tags || []);
+    modal.querySelector('.editTags').appendChild(tagEditor.element);
+
     modal.querySelector('.close').addEventListener('click', () => closeModal(modal));
     // open recipe click
     card.addEventListener('click', () => {
@@ -830,7 +972,7 @@ function createRecipeModal(card, recipe) {
             timer = setTimeout(() => logCookingToBackEnd(recipe.title), 120000)
         }
     });
-    if (user) {
+    if (recipe.is_mine) {
     // edit recipe-modal click
         const deleteRecipeBtn = modal.querySelector(".delete-recipe-btn");
 
@@ -891,7 +1033,11 @@ function createRecipeModal(card, recipe) {
             }
 	}).filter(ing => ing.original_steps !== ing.new_steps);
 
-	submitRecipeChanges(recipe.id, updated_instructions, updated_ingredients, modal);
+	// tags come back sorted from the server, so compare sorted
+	const newTags = tagEditor.getTags();
+	const tagsChanged = [...newTags].sort().join('\n') !== [...(recipe.tags || [])].sort().join('\n');
+
+	submitRecipeChanges(recipe.id, updated_instructions, updated_ingredients, tagsChanged ? newTags : null, modal);
 	
 	// for updated ingredients if only the amount or prep notes changed we dont need a new ingredient x recipe relation
 	// if name changes find ingredient or create and then change the linked keys
@@ -933,10 +1079,14 @@ function createRecipeModal(card, recipe) {
             padding:6px 0;
         `;
 	    row.innerHTML = `
-            <input type="text" class="nameInput" data-index="${idx}" placeholder="Name" value="${ing.name || ''}">
-            <input type="text" class="amountInput" data-index="${idx}" placeholder="Amount" value="${ing.amount || ''}">
-            <input type="text" class="prepInput" data-index="${idx}" placeholder="Prep Notes" value="${ing.preparation_notes || ''}">
+            <input type="text" class="nameInput" data-index="${idx}" placeholder="Name">
+            <input type="text" class="amountInput" data-index="${idx}" placeholder="Amount">
+            <input type="text" class="prepInput" data-index="${idx}" placeholder="Prep Notes">
 	    `;
+        // set as values, not HTML attributes, so quotes etc. in a name can't break out of the input
+        row.querySelector('.nameInput').value = ing.name || '';
+        row.querySelector('.amountInput').value = ing.amount || '';
+        row.querySelector('.prepInput').value = ing.preparation_notes || '';
 
         if (showSectionHeadings) {
             const select = document.createElement('select');
@@ -1143,12 +1293,17 @@ function addIngredientRows(container, ingredients) {
                 padding:6px 0;
             `;
 
+            // ingredient names come from every user's recipes, so they're set as text, never HTML
             row.innerHTML = `
-                <div style="width: 200px;">${ing.name}</div>
-                <input type="text" class="catInput" data-index="${ing.id}" placeholder="Category" value="${ing.category || ''}">
-                <input type="text" class="locInput" data-index="${ing.id}" placeholder="Location" value="${ing.location || ''}">
-                <input type="text" class="seasonInput" data-index="${ing.id}" placeholder="Season" value="${ing.season || ''}">
+                <div class="ingredientTagName" style="width: 200px;"></div>
+                <input type="text" class="catInput" data-index="${ing.id}" placeholder="Category">
+                <input type="text" class="locInput" data-index="${ing.id}" placeholder="Location">
+                <input type="text" class="seasonInput" data-index="${ing.id}" placeholder="Season">
             `;
+            row.querySelector('.ingredientTagName').textContent = ing.name;
+            row.querySelector('.catInput').value = ing.category || '';
+            row.querySelector('.locInput').value = ing.location || '';
+            row.querySelector('.seasonInput').value = ing.season || '';
 
             container.appendChild(row);
 	}

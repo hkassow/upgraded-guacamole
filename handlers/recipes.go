@@ -54,6 +54,12 @@ func handleGetRecipes(w http.ResponseWriter, r *http.Request) {
         return
     }
 
+    // relative to whoever is logged in (not the recipes_of user), so a share link never shows edit controls
+    viewerID := lib.GetUserID(r, store)
+    for i := range recipes {
+        recipes[i].IsMine = viewerID != 0 && recipes[i].OwnerID == viewerID
+    }
+
     w.Header().Set("Content-Type", "application/json")
     json.NewEncoder(w).Encode(recipes)
 }
@@ -168,6 +174,10 @@ func handlePatchRecipe(w http.ResponseWriter, r *http.Request) {
 	err := lib.UpdateRecipe(ctx, updateReq.RecipeID, userID, updateReq)
 	if errors.Is(err, lib.ErrRecipeNotFound) {
 		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	if errors.Is(err, lib.ErrInvalidTags) {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	if err != nil {

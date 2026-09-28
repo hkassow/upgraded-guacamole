@@ -29,6 +29,10 @@ type RecipeResponse struct {
     Steps       map[string][]string `json:"steps"`
     StepIngredients map[string]map[string][]StepIngredient `json:"step_ingredients"`
     Ingredients []ParsedIngredient  `json:"ingredients"`
+    Tags        []string            `json:"tags"`
+    OwnerName   string              `json:"owner_name"`
+    OwnerID     int                 `json:"-"`
+    IsMine      bool                `json:"is_mine"`
 }
 
 func HandleManualRecipePost(ctx context.Context, userID int, rawRecipe models.RawRecipe) error {
@@ -157,12 +161,18 @@ func GetAllRecipes(ctx context.Context, userID int) ([]RecipeResponse, error) {
                 'component', ri.component,
 	            'ingredient_id', i.id,
 	            'recipe_ingredient_id', ri.id
-            ) ORDER BY ri.id) FILTER (WHERE ri.id IS NOT NULL), '[]') as ingredients
+            ) ORDER BY ri.id) FILTER (WHERE ri.id IS NOT NULL), '[]') as ingredients,
+            ARRAY(
+                SELECT t.name FROM recipe_tags rt JOIN tags t ON t.id = rt.tag_id
+                WHERE rt.recipe_id = r.id ORDER BY t.name
+            ) as tags,
+            COALESCE(r.user_id, 0), COALESCE(u.display_name, '')
         FROM recipes r
         LEFT JOIN recipe_ingredient ri ON r.id = ri.recipe_id
 	    LEFT JOIN ingredients i on ri.ingredient_id = i.id
+        LEFT JOIN users u ON u.id = r.user_id
         WHERE r.user_id = $1 or r.user_id in (SELECT followee_id FROM users_follows WHERE follower_id = $1)
-        GROUP BY r.id
+        GROUP BY r.id, u.id
     `, userID)
     if err != nil {
         return nil, err
@@ -177,8 +187,12 @@ func GetAllRecipes(ctx context.Context, userID int) ([]RecipeResponse, error) {
         var stepIngredientsStr *string
         var ingredientsBytes []byte
 
-        if err := rows.Scan(&r.ID, &r.Title, &stepsBytes, &stepIngredientsStr, &ingredientsBytes); err != nil {
+        if err := rows.Scan(&r.ID, &r.Title, &stepsBytes, &stepIngredientsStr, &ingredientsBytes,
+            &r.Tags, &r.OwnerID, &r.OwnerName); err != nil {
             return nil, err
+        }
+        if r.Tags == nil {
+            r.Tags = []string{} // [] not null in the JSON
         }
 
         if err := json.Unmarshal(stepsBytes, &r.Steps); err != nil {
@@ -240,6 +254,17 @@ func UpdateRecipe(ctx context.Context, recipeID int, userID int, req models.Upda
     }
     if err != nil {
         return fmt.Errorf("failed to load recipe: %w", err)
+    }
+
+    // nil means the tags weren't edited; an empty list removes them all
+    if req.Tags != nil {
+        tags, err := NormalizeTags(*req.Tags)
+        if err != nil {
+            return err
+        }
+        if err := setRecipeTags(ctx, tx, recipeID, tags); err != nil {
+            return err
+        }
     }
 
     var steps map[string][]string

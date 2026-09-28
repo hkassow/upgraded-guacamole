@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -320,6 +321,69 @@ func TestPatchRecipeAuth(t *testing.T) {
 
 	if after := createdRecipe(t, alice, "Cake"); after.Steps["main"][0] != "Mix." {
 		t.Errorf("recipe was changed by an unauthorized request: %q", after.Steps)
+	}
+}
+
+func TestGetRecipesIsMine(t *testing.T) {
+	ctx := testutil.SetupDB(t)
+	alice := testutil.CreateUser(t, ctx, "alice")
+	bob := testutil.CreateUser(t, ctx, "bob")
+	testutil.Follow(t, ctx, alice, bob)
+	createManualRecipe(t, alice, "Alice's cake")
+	createManualRecipe(t, bob, "Bob's bread")
+
+	isMine := func(rec *httptest.ResponseRecorder) map[string]bool {
+		t.Helper()
+		expectStatus(t, rec, http.StatusOK)
+		got := map[string]bool{}
+		for _, r := range decodeRecipes(t, rec) {
+			got[r.Title] = r.IsMine
+			if r.Tags == nil {
+				t.Errorf("%s: tags is null, want []", r.Title)
+			}
+		}
+		return got
+	}
+
+	want := map[string]bool{"Alice's cake": true, "Bob's bread": false}
+	if got := isMine(request(t, RecipesHandler, http.MethodGet, "/recipes", nil, &alice)); !reflect.DeepEqual(got, want) {
+		t.Errorf("alice's view = %v, want %v", got, want)
+	}
+
+	// viewing bob's share link: nothing is "mine", logged in or not
+	if got := isMine(request(t, RecipesHandler, http.MethodGet, "/recipes?recipes_of="+bob.UUID, nil, &alice)); got["Bob's bread"] {
+		t.Error("bob's recipe marked as alice's on his share link")
+	}
+	if got := isMine(request(t, RecipesHandler, http.MethodGet, "/recipes?recipes_of="+bob.UUID, nil, nil)); got["Bob's bread"] {
+		t.Error("recipe marked as mine for a logged out visitor")
+	}
+
+	// the owner's database id isn't sent to the browser
+	rec := request(t, RecipesHandler, http.MethodGet, "/recipes", nil, &alice)
+	if strings.Contains(rec.Body.String(), "OwnerID") || strings.Contains(rec.Body.String(), "owner_id") {
+		t.Error("owner id leaked in the response")
+	}
+}
+
+func TestPatchRecipeTags(t *testing.T) {
+	ctx := testutil.SetupDB(t)
+	alice := testutil.CreateUser(t, ctx, "alice")
+	r := createManualRecipe(t, alice, "Cake")
+
+	patch := func(tags []string) *httptest.ResponseRecorder {
+		return request(t, RecipesHandler, http.MethodPatch, "/recipes",
+			models.UpdateRecipeRequest{RecipeID: r.ID, Tags: &tags}, &alice)
+	}
+
+	expectStatus(t, patch([]string{"Baking", "dessert"}), http.StatusOK)
+	if got := createdRecipe(t, alice, "Cake").Tags; !reflect.DeepEqual(got, []string{"baking", "dessert"}) {
+		t.Errorf("tags = %q", got)
+	}
+
+	rec := patch([]string{strings.Repeat("x", 100)})
+	expectStatus(t, rec, http.StatusBadRequest)
+	if !strings.Contains(rec.Body.String(), "invalid tags") {
+		t.Errorf("body = %q", rec.Body.String())
 	}
 }
 

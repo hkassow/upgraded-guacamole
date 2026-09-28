@@ -118,7 +118,9 @@
 			<p>Click the button to fetch recipes from <code>/recipes</code></p>
 			<button id="recipesBtn" onclick="fetchRecipes()">Get Recipes</button>
 		</div>
+		<div id="recipeFilters" class="recipe-filters" hidden></div>
 		<div id="recipesResponse"></div>
+		<p id="recipeFilterEmpty" class="filter-empty" hidden>No recipes match these filters.</p>
 
 		<!-- Recipe Add Modal -->
 		<div id="recipeModal" class="modal" onclick="handleModalBackgroundClick(event, this)">
@@ -146,9 +148,9 @@
 					id="recipeDescription"
 					name="description"
 					required
-					placeholder="Copy & paste a recipe including the ingredients, and the offline-model will parse it and add the recipe to your profile.
+					placeholder="Copy & paste a recipe including the ingredients, and the AI model will parse it and add the recipe to your profile.
 
-Please allow an hour or so for it to parse (could take much longer depending on when I turn on the model)."
+Parsing usually takes about 5 minutes."
 					></textarea>
 
 					<button type="submit">Save Recipe</button>
@@ -180,8 +182,7 @@ Please allow an hour or so for it to parse (could take much longer depending on 
 					<button type="button" id="clearImageBtn" hidden>Clear all images</button>
 
 					<p class="ai-timing-note">
-					The offline model will read the recipe from your image. Please allow an hour or so
-					for it to parse (could take longer depending on when the model is running).
+					The AI model will read the recipe from your photos. Parsing usually takes about 5 minutes.
 					</p>
 
 					<button type="submit" id="submitImageBtn" disabled>Save Recipe</button>

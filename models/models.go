@@ -28,6 +28,7 @@ type RawRecipe struct {
 type UpdateRecipeRequest struct {
     UpdatedIngredients []UpdatedIngredient `json:"updated_ingredients"`
     UpdatedSteps       []UpdatedStep       `json:"updated_steps"`
+    Tags               *[]string           `json:"tags,omitempty"` // nil = unchanged, [] = remove all
     RecipeID 	       int		   `json:"recipe_id"`
 }
 
