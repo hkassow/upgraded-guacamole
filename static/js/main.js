@@ -220,13 +220,50 @@ function loginWithGoogle() {
     window.location.href = "/auth/google/login";
 }
 
+// A link anyone can open (no account needed) that shows just this recipe with its popup open.
+// Uses the recipe's uuid rather than its id, so other recipes can't be found by counting.
+function recipeShareUrl(recipe) {
+    return `${window.location.origin}/?recipe=${encodeURIComponent(recipe.uuid)}`;
+}
+
+// Phones get the native share sheet; everything else copies the link.
+async function shareRecipe(recipe) {
+    const url = recipeShareUrl(recipe);
+
+    const touchDevice = window.matchMedia('(pointer: coarse)').matches;
+    if (navigator.share && touchDevice) {
+        try {
+            await navigator.share({ title: recipe.title, url });
+            return;
+        } catch (err) {
+            if (err.name === 'AbortError') return; // closed the share sheet
+            // otherwise fall back to copying
+        }
+    }
+
+    try {
+        await navigator.clipboard.writeText(url);
+        showToast('Link copied - anyone with it can view this recipe');
+    } catch (err) {
+        // clipboard blocked: show the link so it can be copied by hand
+        showToast(url);
+    }
+}
+
+// ?recipes_of=<user uuid> shows someone's recipes, ?recipe=<recipe uuid> one shared recipe
+function isShareLink() {
+    const params = new URLSearchParams(window.location.search);
+    return params.has('recipes_of') || params.has('recipe');
+}
+
 async function getCurrentUser() {
     const res = await fetch("/auth/me", {
         credentials: "include"
     });
 
     user = false;
-    if (window.location.href.includes('recipes_of')) {
+    // share links (someone's recipes, or one recipe) are viewable without an account
+    if (isShareLink()) {
         return null;
     } else if (!res.ok) {
         document.body.classList.add("not-logged-in")
@@ -301,6 +338,7 @@ async function fetchRecipes() {
     const params = new URLSearchParams(window.location.search);
 
     const recipesOf = params.get("recipes_of");
+    const sharedRecipe = params.get("recipe"); // a single shared recipe, opened straight away
 
     btn.disabled = true;
     responseDiv.className = 'loading';
@@ -308,7 +346,9 @@ async function fetchRecipes() {
     try {
         let url = "/recipes";
 
-        if (recipesOf) {
+        if (sharedRecipe) {
+            url += `?recipe=${encodeURIComponent(sharedRecipe)}`;
+        } else if (recipesOf) {
             url += `?recipes_of=${encodeURIComponent(recipesOf)}`;
         }
         const response = await fetch(url, {
@@ -316,6 +356,12 @@ async function fetchRecipes() {
             headers: { 'Content-Type': 'application/json' }
         });
 
+        if (sharedRecipe && (response.status === 404 || response.status === 400)) {
+            responseDiv.className = '';
+            responseDiv.textContent = "This shared recipe couldn't be found. It may have been deleted, or the link was cut off.";
+            renderRecipeFilters([]);
+            return;
+        }
         if (!response.ok) throw new Error('HTTP ' + response.status);
 
         const recipes = await response.json();
@@ -354,7 +400,16 @@ async function fetchRecipes() {
 		        createRecipeModal(card, r)
             });
         }
-        renderRecipeFilters(recipes);
+
+        if (sharedRecipe) {
+            // one recipe: no filters, and open it for whoever followed the link. Waits for the page to
+            // be drawn first - opened mid-load, the popup's fade-in animation can stay stuck invisible.
+            renderRecipeFilters([]);
+            const card = responseDiv.querySelector('.recipe-card');
+            requestAnimationFrame(() => requestAnimationFrame(() => card?.click()));
+        } else {
+            renderRecipeFilters(recipes);
+        }
     } catch (error) {
 	    console.log(error);
         responseDiv.className = 'error';
@@ -900,13 +955,11 @@ function createRecipeModal(card, recipe) {
         <div class="modal-content recipe-modal">
             <span class="close">&times;</span>
             <h2 class="recipe-modal-title" style="text-transform: capitalize;"></h2>
-	        ${recipe.is_mine ? `
-                <div class="button-container">
-                    <br>
-                    <button class="edit-recipe-btn" data-mode="view">Edit Recipe</button>
-                    <button class="delete-recipe-btn" hidden>Delete Recipe</button>
-                </div>`
-            : '' }
+	        <div class="button-container">
+	            ${recipe.is_mine ? '<button class="edit-recipe-btn" data-mode="view">Edit Recipe</button>' : ''}
+	            <button class="share-recipe-btn">Share</button>
+	            ${recipe.is_mine ? '<button class="delete-recipe-btn" hidden>Delete Recipe</button>' : ''}
+	        </div>
 	        <div class="viewRecipe">
             	<div class="viewTags"></div>
             	<h3>Ingredients</h3>
@@ -945,6 +998,7 @@ function createRecipeModal(card, recipe) {
     titleInput.value = recipe.title;
 
     modal.querySelector('.close').addEventListener('click', () => closeModal(modal));
+    modal.querySelector('.share-recipe-btn').addEventListener('click', () => shareRecipe(recipe));
     // open recipe click
     card.addEventListener('click', () => {
         if (making_grocery_list) {

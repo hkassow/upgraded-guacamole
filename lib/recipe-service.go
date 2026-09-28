@@ -26,6 +26,7 @@ type ParsedIngredient struct {
 
 type RecipeResponse struct {
 	ID              int                                    `json:"id"`
+	UUID            string                                 `json:"uuid"` // used in share links
 	Title           string                                 `json:"title"`
 	Steps           map[string][]string                    `json:"steps"`
 	StepIngredients map[string]map[string][]StepIngredient `json:"step_ingredients"`
@@ -150,9 +151,30 @@ func SaveParsedRecipe(ctx context.Context, title string, userID int, parsed *Rec
 	return tx.Commit(ctx)
 }
 
+// GetAllRecipes returns the user's recipes and those of everyone they follow.
 func GetAllRecipes(ctx context.Context, userID int) ([]RecipeResponse, error) {
+	return queryRecipes(ctx,
+		`r.user_id = $1 or r.user_id in (SELECT followee_id FROM users_follows WHERE follower_id = $1)`,
+		userID)
+}
+
+// GetRecipeByUUID returns one recipe by its uuid - the id used in share links, since it can't be
+// guessed the way the numeric id can. Anyone with the link can view it.
+func GetRecipeByUUID(ctx context.Context, recipeUUID string) (RecipeResponse, error) {
+	recipes, err := queryRecipes(ctx, `r.uuid = $1`, recipeUUID)
+	if err != nil {
+		return RecipeResponse{}, err
+	}
+	if len(recipes) == 0 {
+		return RecipeResponse{}, ErrRecipeNotFound
+	}
+	return recipes[0], nil
+}
+
+// queryRecipes loads recipes matching where (a fixed SQL condition on r, with $n args).
+func queryRecipes(ctx context.Context, where string, args ...any) ([]RecipeResponse, error) {
 	rows, err := db.Pool.Query(ctx, `
-        SELECT r.id, r.title, r.steps, r.step_ingredients,
+        SELECT r.id, r.uuid::text, r.title, r.steps, r.step_ingredients,
             COALESCE(json_agg(json_build_object(
                 'name', i.name, 
                 'amount', ri.amount,
@@ -171,9 +193,9 @@ func GetAllRecipes(ctx context.Context, userID int) ([]RecipeResponse, error) {
         LEFT JOIN recipe_ingredient ri ON r.id = ri.recipe_id
 	    LEFT JOIN ingredients i on ri.ingredient_id = i.id
         LEFT JOIN users u ON u.id = r.user_id
-        WHERE r.user_id = $1 or r.user_id in (SELECT followee_id FROM users_follows WHERE follower_id = $1)
+        WHERE `+where+`
         GROUP BY r.id, u.id
-    `, userID)
+    `, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -187,7 +209,7 @@ func GetAllRecipes(ctx context.Context, userID int) ([]RecipeResponse, error) {
 		var stepIngredientsStr *string
 		var ingredientsBytes []byte
 
-		if err := rows.Scan(&r.ID, &r.Title, &stepsBytes, &stepIngredientsStr, &ingredientsBytes,
+		if err := rows.Scan(&r.ID, &r.UUID, &r.Title, &stepsBytes, &stepIngredientsStr, &ingredientsBytes,
 			&r.Tags, &r.OwnerID, &r.OwnerName); err != nil {
 			return nil, err
 		}

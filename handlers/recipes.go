@@ -1,10 +1,13 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
+
+	"github.com/google/uuid"
 
 	"go-guacamole/lib"
 	"go-guacamole/models"
@@ -38,17 +41,34 @@ func RecipesHandler(w http.ResponseWriter, r *http.Request) {
 func handleGetRecipes(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	recipesOf := r.URL.Query().Get("recipes_of")
+	var recipes []lib.RecipeResponse
+	var err error
 
-	userID := 0
-	if recipesOf != "" {
-		userID = lib.GetUserIdByUuid(ctx, recipesOf)
+	if recipeUUID := r.URL.Query().Get("recipe"); recipeUUID != "" {
+		// a shared recipe link: just that one recipe, no login needed
+		recipes, err = getSharedRecipe(ctx, recipeUUID)
+	} else {
+		recipesOf := r.URL.Query().Get("recipes_of")
+
+		userID := 0
+		if recipesOf != "" {
+			userID = lib.GetUserIdByUuid(ctx, recipesOf)
+		}
+
+		if recipesOf == "" || userID == 0 {
+			userID = lib.GetUserID(r, store)
+		}
+		recipes, err = lib.GetAllRecipes(ctx, userID)
 	}
 
-	if recipesOf == "" || userID == 0 {
-		userID = lib.GetUserID(r, store)
+	if errors.Is(err, errInvalidRecipeLink) {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
-	recipes, err := lib.GetAllRecipes(ctx, userID)
+	if errors.Is(err, lib.ErrRecipeNotFound) {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -62,6 +82,21 @@ func handleGetRecipes(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(recipes)
+}
+
+var errInvalidRecipeLink = errors.New("invalid recipe link")
+
+// getSharedRecipe loads the recipe from a share link, as a one-item list so the page can render it
+// the same way as the normal list.
+func getSharedRecipe(ctx context.Context, recipeUUID string) ([]lib.RecipeResponse, error) {
+	if _, err := uuid.Parse(recipeUUID); err != nil {
+		return nil, errInvalidRecipeLink
+	}
+	recipe, err := lib.GetRecipeByUUID(ctx, recipeUUID)
+	if err != nil {
+		return nil, err
+	}
+	return []lib.RecipeResponse{recipe}, nil
 }
 
 func handlePostRecipe(w http.ResponseWriter, r *http.Request) {

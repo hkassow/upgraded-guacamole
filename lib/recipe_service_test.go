@@ -286,6 +286,24 @@ func TestGetAllRecipesVisibility(t *testing.T) {
 	}
 }
 
+func TestGetRecipeByUUID(t *testing.T) {
+	ctx := testutil.SetupDB(t)
+	alice := testutil.CreateUser(t, ctx, "alice")
+	r := saveSample(t, ctx, alice, "Chicken")
+
+	got, err := GetRecipeByUUID(ctx, r.UUID)
+	if err != nil {
+		t.Fatalf("GetRecipeByUUID: %v", err)
+	}
+	if !reflect.DeepEqual(got, r) {
+		t.Errorf("by uuid = %+v\nwant the same as the list: %+v", got, r)
+	}
+
+	if _, err := GetRecipeByUUID(ctx, "00000000-0000-0000-0000-000000000000"); !errors.Is(err, ErrRecipeNotFound) {
+		t.Errorf("unknown uuid: err = %v, want ErrRecipeNotFound", err)
+	}
+}
+
 func TestGetAllRecipesEmpty(t *testing.T) {
 	ctx := testutil.SetupDB(t)
 	alice := testutil.CreateUser(t, ctx, "alice")

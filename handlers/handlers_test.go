@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -12,6 +13,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/sessions"
 	"golang.org/x/oauth2"
 
@@ -272,6 +274,36 @@ func TestGetRecipes(t *testing.T) {
 	if got := titles(request(t, RecipesHandler, http.MethodGet, "/recipes?recipes_of=00000000-0000-0000-0000-000000000000", nil, &alice)); len(got) != 1 || got[0] != "Alice's cake" {
 		t.Errorf("unknown recipes_of = %v", got)
 	}
+}
+
+func TestGetSharedRecipe(t *testing.T) {
+	ctx := testutil.SetupDB(t)
+	alice := testutil.CreateUser(t, ctx, "alice")
+	cake := createManualRecipe(t, alice, "Cake")
+	createManualRecipe(t, alice, "Bread")
+
+	if _, err := uuid.Parse(cake.UUID); err != nil {
+		t.Fatalf("recipe uuid = %q, want a uuid", cake.UUID)
+	}
+
+	// anyone with the link sees just that recipe, no login needed
+	rec := request(t, RecipesHandler, http.MethodGet, "/recipes?recipe="+cake.UUID, nil, nil)
+	expectStatus(t, rec, http.StatusOK)
+	got := decodeRecipes(t, rec)
+	if len(got) != 1 || got[0].Title != "Cake" || got[0].IsMine || len(got[0].Ingredients) != 2 {
+		t.Errorf("shared recipe = %+v, want only Cake, not marked as mine", got)
+	}
+
+	// the owner opening their own link still gets edit controls
+	if got := decodeRecipes(t, request(t, RecipesHandler, http.MethodGet, "/recipes?recipe="+cake.UUID, nil, &alice)); !got[0].IsMine {
+		t.Error("owner's shared recipe not marked as mine")
+	}
+
+	expectStatus(t, request(t, RecipesHandler, http.MethodGet, "/recipes?recipe=not-a-uuid", nil, nil), http.StatusBadRequest)
+	expectStatus(t, request(t, RecipesHandler, http.MethodGet, "/recipes?recipe="+uuid.NewString(), nil, nil), http.StatusNotFound)
+
+	// the numeric id doesn't work as a share link
+	expectStatus(t, request(t, RecipesHandler, http.MethodGet, fmt.Sprintf("/recipes?recipe=%d", cake.ID), nil, nil), http.StatusBadRequest)
 }
 
 func TestGetRecipesEmptyIsArray(t *testing.T) {

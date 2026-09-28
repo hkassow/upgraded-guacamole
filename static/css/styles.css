@@ -122,11 +122,14 @@ button:disabled {
     border-radius: 8px;
 }
 
+/* recipe popup buttons: Edit + Share together on the left, Delete on its own on the right */
 .button-container {
     display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
 }
 
-.button-container button + button:not([hidden]) {
+.button-container .delete-recipe-btn {
     margin-left: auto;
 }
 
