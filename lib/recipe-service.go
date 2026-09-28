@@ -423,6 +423,21 @@ func SaveRecipeJobParsedJSON(ctx context.Context, jobID int, parsedJSON []byte) 
     return err
 }
 
+func SaveRecipeJobTranscript(ctx context.Context, jobID int, transcript string) error {
+    _, err := db.Pool.Exec(ctx,
+        `UPDATE recipe_jobs
+         SET transcript = $1, updated_at = NOW()
+         WHERE id = $2`,
+        transcript, jobID,
+    )
+
+    if err != nil {
+        log.Println("Failed to save recipe_job transcript:", err)
+    }
+
+    return err
+}
+
 func IncrementRecipeJobFailCount(ctx context.Context, jobID int) error {
     _, err := db.Pool.Exec(ctx,
         `UPDATE recipe_jobs
@@ -440,7 +455,7 @@ func IncrementRecipeJobFailCount(ctx context.Context, jobID int) error {
 
 func LoadUnparsedRecipeJobs(ctx context.Context) (error) {
     rows, err := db.Pool.Query(ctx,
-        `SELECT id, title, text, images, type, user_id, parsed_json
+        `SELECT id, title, text, images, type, user_id, parsed_json, COALESCE(transcript, '')
          FROM recipe_jobs
          WHERE parsed = FALSE AND fail_count < $1`,
         MaxRecipeJobFailures,
@@ -455,7 +470,7 @@ func LoadUnparsedRecipeJobs(ctx context.Context) (error) {
     for rows.Next() {
         var job models.RecipeJob
         var imagesJSON []byte
-	    if err := rows.Scan(&job.ID, &job.Name, &job.Text, &imagesJSON, &job.Type, &job.User_id, &job.ParsedJSON); err != nil {
+	    if err := rows.Scan(&job.ID, &job.Name, &job.Text, &imagesJSON, &job.Type, &job.User_id, &job.ParsedJSON, &job.Transcript); err != nil {
             return err
         }
         if len(imagesJSON) > 0 {

@@ -353,4 +353,103 @@ func TestProcessRecipeJobImage(t *testing.T) {
 	if r := recipeByTitle(t, ctx, alice.ID, "From a photo"); len(r.Ingredients) != 4 {
 		t.Errorf("ingredients = %d, want 4", len(r.Ingredients))
 	}
+	if got := jobTranscript(t, ctx, onlyJobID(t, ctx)); got != "transcribed recipe text" {
+		t.Errorf("stored transcript = %q", got)
+	}
+}
+
+func jobTranscript(t *testing.T, ctx context.Context, jobID int) string {
+	t.Helper()
+
+	var transcript *string
+	if err := db.Pool.QueryRow(ctx, `SELECT transcript FROM recipe_jobs WHERE id = $1`, jobID).Scan(&transcript); err != nil {
+		t.Fatal(err)
+	}
+	if transcript == nil {
+		return ""
+	}
+	return *transcript
+}
+
+// fakeImageModels answers vision requests with transcript and text requests with textReply(), and
+// counts vision calls.
+func fakeImageModels(t *testing.T, transcript string, textReply func() string) *int {
+	visionCalls := new(int)
+	fakeDeepInfra(t, func(w http.ResponseWriter, r *http.Request) {
+		var req diChatRequest
+		json.NewDecoder(r.Body).Decode(&req)
+		if req.Model == deepInfraVisionModel {
+			*visionCalls++
+			writeChatCompletion(w, transcript)
+			return
+		}
+		writeChatCompletion(w, textReply())
+	})
+	return visionCalls
+}
+
+// A failure in the text step keeps the transcript, and the retry skips the vision model.
+func TestProcessRecipeJobImageRetryReusesTranscript(t *testing.T) {
+	ctx := testutil.SetupDB(t)
+	alice := testutil.CreateUser(t, ctx, "alice")
+	drainRecipeQueue()
+	t.Cleanup(func() { drainRecipeQueue() })
+
+	textReply := "not json" // first text call fails
+	visionCalls := fakeImageModels(t, "transcribed recipe text", func() string { return textReply })
+
+	job := models.RecipeJob{Name: "From a photo", Images: []string{"aW1n"}, Type: "image", User_id: alice.ID}
+	if err := ProcessRecipeJob(ctx, job); err == nil {
+		t.Fatal("expected the text step to fail")
+	}
+
+	jobID := onlyJobID(t, ctx)
+	if got := jobTranscript(t, ctx, jobID); got != "transcribed recipe text" {
+		t.Errorf("transcript after text failure = %q, want it kept", got)
+	}
+	if row := loadJob(t, ctx, jobID); row.FailCount != 1 || row.ParsedJSON != nil {
+		t.Errorf("job = fail_count:%d parsed_json:%s", row.FailCount, row.ParsedJSON)
+	}
+
+	// restart: the reloaded job carries the transcript, so only the text model runs
+	textReply = sampleModelJSON
+	if err := LoadUnparsedRecipeJobs(ctx); err != nil {
+		t.Fatal(err)
+	}
+	queued := drainRecipeQueue()
+	if len(queued) != 1 || queued[0].Transcript != "transcribed recipe text" {
+		t.Fatalf("reloaded jobs = %+v, want the job with its transcript", queued)
+	}
+	if err := ProcessRecipeJob(ctx, queued[0]); err != nil {
+		t.Fatalf("retry: %v", err)
+	}
+
+	if *visionCalls != 1 {
+		t.Errorf("vision model calls = %d, want 1 (retry should reuse the transcript)", *visionCalls)
+	}
+	if !loadJob(t, ctx, jobID).Parsed {
+		t.Error("job not marked parsed after retry")
+	}
+}
+
+func TestProcessRecipeJobImageEmptyTranscript(t *testing.T) {
+	ctx := testutil.SetupDB(t)
+	alice := testutil.CreateUser(t, ctx, "alice")
+	fakeImageModels(t, "   ", func() string {
+		t.Error("text model should not run on an empty transcript")
+		return sampleModelJSON
+	})
+
+	job := models.RecipeJob{Name: "Blurry photo", Images: []string{"aW1n"}, Type: "image", User_id: alice.ID}
+	if err := ProcessRecipeJob(ctx, job); err == nil {
+		t.Fatal("expected an error for an empty transcript")
+	}
+
+	jobID := onlyJobID(t, ctx)
+	if got := jobTranscript(t, ctx, jobID); got != "" {
+		t.Errorf("stored transcript = %q, want nothing saved", got)
+	}
+	if loadJob(t, ctx, jobID).FailCount != 1 {
+		t.Error("fail_count not incremented")
+	}
 }

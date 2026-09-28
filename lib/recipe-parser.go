@@ -1,6 +1,7 @@
 package lib
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/tls"
 	"context"
@@ -10,6 +11,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"net/http"
 	"time"
 	"log"
@@ -338,22 +340,32 @@ type diMessage struct {
 }
  
 type diChatRequest struct {
-	Model       string      `json:"model"`
-	Messages    []diMessage `json:"messages"`
-	Temperature float64     `json:"temperature"`
+	Model         string            `json:"model"`
+	Messages      []diMessage       `json:"messages"`
+	Temperature   float64           `json:"temperature"`
+	MaxTokens     int               `json:"max_tokens,omitempty"`
+	Stream        bool              `json:"stream"`
+	StreamOptions *diStreamOptions  `json:"stream_options,omitempty"`
 }
- 
-type diChatResponse struct {
+
+type diStreamOptions struct {
+	IncludeUsage bool `json:"include_usage"`
+}
+
+type diUsage struct {
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
+}
+
+// one "data:" event of a streamed chat completion
+type diStreamChunk struct {
 	Choices []struct {
-		Message struct {
+		Delta struct {
 			Content string `json:"content"`
-		} `json:"message"`
-		FinishReason string `json:"finish_reason"` // "length" means the reply was cut off
+		} `json:"delta"`
+		FinishReason *string `json:"finish_reason"` // "length" means the reply was cut off
 	} `json:"choices"`
-	Usage *struct {
-		PromptTokens     int `json:"prompt_tokens"`
-		CompletionTokens int `json:"completion_tokens"`
-	} `json:"usage,omitempty"`
+	Usage *diUsage `json:"usage,omitempty"`
 	Error *struct {
 		Message string `json:"message"`
 	} `json:"error,omitempty"`
@@ -476,76 +488,149 @@ func ParseRecipeImageCall(images []string) (*RecipeParsed, error) {
 	return callParserEndpoint(path, body)
 }
 
-// The request isn't streamed, so DeepInfra only responds once the whole reply is generated. Long
-// recipes (with ingredients_used_for_step) can take well over 2 minutes on the 235B models.
-const deepInfraTimeout = 5 * time.Minute
+// DeepInfra replies are streamed, so a slow-but-working generation can be told apart from a stuck
+// one: a call fails when no data arrives for a while, not after a fixed total time.
+var (
+	// waiting for the first data covers prompt processing, which is slow for big photo prompts
+	deepInfraFirstDataTimeout = 3 * time.Minute
+	// once tokens are flowing, this long without any means the stream is stuck
+	deepInfraIdleTimeout = 60 * time.Second
+	// hard backstop for a reply that keeps streaming forever
+	deepInfraMaxDuration = 15 * time.Minute
+	// how often to log progress on a long reply
+	deepInfraProgressInterval = 60 * time.Second
+)
 
-func deepInfraHTTPClient() *http.Client {
-	return &http.Client{
-		Timeout: deepInfraTimeout,
-	}
-}
+// Caps a runaway reply (e.g. the model repeating itself). A large recipe's JSON is a few thousand
+// tokens; hitting this shows up as finish_reason "length".
+const deepInfraMaxTokens = 8192
+
+var deepInfraClient = &http.Client{} // timeouts come from the request context, see callDeepInfra
 
 func callDeepInfra(req diChatRequest) (string, error) {
 	apiKey, err := LoadSecret("DEEPINFRA_API_KEY")
 	if err != nil {
 		return "", fmt.Errorf("loading DeepInfra API key: %w", err)
 	}
- 
+
+	req.Stream = true
+	req.StreamOptions = &diStreamOptions{IncludeUsage: true}
+	if req.MaxTokens == 0 {
+		req.MaxTokens = deepInfraMaxTokens
+	}
+
 	body, err := json.Marshal(req)
 	if err != nil {
 		return "", fmt.Errorf("marshaling deepinfra request: %w", err)
 	}
- 
-	httpReq, err := http.NewRequest("POST", deepInfraChatURL, bytes.NewBuffer(body))
+
+	ctx, cancel := context.WithTimeout(context.Background(), deepInfraMaxDuration)
+	defer cancel()
+
+	// cancels the request if the stream goes quiet; reset every time data arrives
+	var stalled atomic.Bool
+	idle := time.AfterFunc(deepInfraFirstDataTimeout, func() {
+		stalled.Store(true)
+		cancel()
+	})
+	defer idle.Stop()
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", deepInfraChatURL, bytes.NewBuffer(body))
 	if err != nil {
 		return "", err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Accept", "text/event-stream")
 	httpReq.Header.Set("Authorization", "Bearer "+apiKey)
- 
+
 	start := time.Now()
-	resp, err := deepInfraHTTPClient().Do(httpReq)
+	receivedData := false
+	failure := func(what string, err error) error {
+		elapsed := time.Since(start).Round(time.Second)
+		if stalled.Load() {
+			wait := deepInfraIdleTimeout
+			if !receivedData {
+				wait = deepInfraFirstDataTimeout
+			}
+			return fmt.Errorf("deepinfra %s: no data received for %s (%s total): %w", what, wait, elapsed, err)
+		}
+		return fmt.Errorf("deepinfra %s after %s: %w", what, elapsed, err)
+	}
+
+	resp, err := deepInfraClient.Do(httpReq)
 	if err != nil {
-		return "", fmt.Errorf("deepinfra request failed after %s (timeout %s): %w",
-			time.Since(start).Round(time.Second), deepInfraTimeout, err)
+		return "", failure("request failed", err)
 	}
 	defer resp.Body.Close()
- 
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("reading deepinfra response: %w", err)
-	}
 
 	if resp.StatusCode != http.StatusOK {
-   		return "", fmt.Errorf("deepinfra returned status %d: %s", resp.StatusCode, string(data))
-   	}
- 
-	var wrapper diChatResponse
-	if err := json.Unmarshal(data, &wrapper); err != nil {
-		return "", fmt.Errorf("failed to decode deepinfra response: %w (raw: %s)", err, string(data))
-	}
- 
-	if wrapper.Error != nil {
-		return "", fmt.Errorf("deepinfra error: %s", wrapper.Error.Message)
-	}
-	if len(wrapper.Choices) == 0 {
-		return "", fmt.Errorf("deepinfra returned no choices (raw: %s)", string(data))
+		data, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+		return "", fmt.Errorf("deepinfra returned status %d: %s", resp.StatusCode, string(data))
 	}
 
-	// log how long calls take so the timeout can be tuned against real recipes
-	choice := wrapper.Choices[0]
-	usage := "unknown"
-	if wrapper.Usage != nil {
-		usage = fmt.Sprintf("%d prompt + %d completion", wrapper.Usage.PromptTokens, wrapper.Usage.CompletionTokens)
+	var content strings.Builder
+	var finishReason string
+	var usage *diUsage
+	lastProgressLog := start
+
+	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 64<<10), 4<<20)
+	for scanner.Scan() {
+		receivedData = true
+		idle.Reset(deepInfraIdleTimeout)
+
+		// server-sent events: "data: {...}" lines, blank separators, ": comment" keep-alives
+		data, ok := strings.CutPrefix(scanner.Text(), "data:")
+		if !ok {
+			continue
+		}
+		data = strings.TrimSpace(data)
+		if data == "[DONE]" {
+			break
+		}
+
+		var chunk diStreamChunk
+		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+			return "", fmt.Errorf("decoding deepinfra stream: %w (raw: %s)", err, data)
+		}
+		if chunk.Error != nil {
+			return "", fmt.Errorf("deepinfra error: %s", chunk.Error.Message)
+		}
+		if chunk.Usage != nil {
+			usage = chunk.Usage
+		}
+		for _, choice := range chunk.Choices {
+			content.WriteString(choice.Delta.Content)
+			if choice.FinishReason != nil && *choice.FinishReason != "" {
+				finishReason = *choice.FinishReason
+			}
+		}
+
+		if time.Since(lastProgressLog) >= deepInfraProgressInterval {
+			lastProgressLog = time.Now()
+			log.Printf("deepinfra: %s still generating after %s (%d characters so far)",
+				req.Model, time.Since(start).Round(time.Second), content.Len())
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return "", failure("stream failed", err)
+	}
+	if content.Len() == 0 {
+		return "", fmt.Errorf("deepinfra returned no content (finish_reason: %q)", finishReason)
+	}
+
+	// log how long calls take so the timeouts can be tuned against real recipes
+	usageText := "unknown"
+	if usage != nil {
+		usageText = fmt.Sprintf("%d prompt + %d completion", usage.PromptTokens, usage.CompletionTokens)
 	}
 	log.Printf("deepinfra: %s took %s (tokens: %s, finish_reason: %q)",
-		req.Model, time.Since(start).Round(time.Second), usage, choice.FinishReason)
-	if choice.FinishReason == "length" {
+		req.Model, time.Since(start).Round(time.Second), usageText, finishReason)
+	if finishReason == "length" {
 		log.Printf("deepinfra: %s reply was cut off at the token limit, the recipe JSON is probably incomplete", req.Model)
 	}
 
-	return choice.Message.Content, nil
+	return content.String(), nil
 }
 
 func extractRecipeJSON(rawText string) (*RecipeParsed, error) {
@@ -709,8 +794,18 @@ func imageDataURI(imageBase64 string) string {
 }
 
 func ParseRecipeImageCallDeepInfra(images []string) (*RecipeParsed, error) {
+	transcript, err := TranscribeRecipeImages(images)
+	if err != nil {
+		return &RecipeParsed{}, err
+	}
+	return extractRecipeJSON(transcript)
+}
+
+// TranscribeRecipeImages reads the recipe text from photos with the vision model. This is the slow
+// and expensive step of an image job, so the worker saves its result for retries.
+func TranscribeRecipeImages(images []string) (string, error) {
 	if len(images) == 0 {
-		return &RecipeParsed{}, fmt.Errorf("no images provided")
+		return "", fmt.Errorf("no images provided")
 	}
 
 	content := make([]diContentPart, 0, len(images)+1)
@@ -738,10 +833,13 @@ func ParseRecipeImageCallDeepInfra(images []string) (*RecipeParsed, error) {
  	})
 
 	if err != nil {
-		return &RecipeParsed{}, fmt.Errorf("image transcription failed: %w", err)
+		return "", fmt.Errorf("image transcription failed: %w", err)
 	}
- 
-	return extractRecipeJSON(transcript)
+	if strings.TrimSpace(transcript) == "" {
+		return "", fmt.Errorf("image transcription returned no text")
+	}
+
+	return transcript, nil
 }
 
 var RecipeQueue = make(chan models.RecipeJob, 100)
@@ -820,7 +918,15 @@ func ProcessRecipeJob(ctx context.Context, job models.RecipeJob) error {
         switch job.Type {
         case "image":
             //parsed, err = ParseRecipeImageCall(job.Images)
-            parsed, err = ParseRecipeImageCallDeepInfra(job.Images)
+            transcript := job.Transcript
+            if transcript != "" {
+                log.Println("Reusing stored transcript for recipe:", job.Name)
+            } else if transcript, err = TranscribeRecipeImages(job.Images); err == nil {
+                _ = SaveRecipeJobTranscript(ctx, jobID, transcript)
+            }
+            if err == nil {
+                parsed, err = extractRecipeJSON(transcript)
+            }
         default: // "text"
             //parsed, err = ParseRecipeCall(job.Text)
             parsed, err = ParseRecipeCallDeepInfra(job.Text)

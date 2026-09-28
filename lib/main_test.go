@@ -2,11 +2,13 @@ package lib
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"go-guacamole/models"
 )
@@ -46,12 +48,40 @@ func modelReplies(content string) http.HandlerFunc {
 	}
 }
 
+// writeChatCompletion streams content back the way DeepInfra does: server-sent events with the
+// text split across several chunks, then a finish chunk, a usage chunk and [DONE].
 func writeChatCompletion(w http.ResponseWriter, content string) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
-		"choices": []map[string]any{
-			{"message": map[string]any{"content": content}},
-		},
+	writeStreamChunks(w, content, "stop")
+}
+
+func writeStreamChunks(w http.ResponseWriter, content, finishReason string) {
+	w.Header().Set("Content-Type", "text/event-stream")
+
+	runes := []rune(content) // split on characters so "½" etc. aren't cut in half
+	third := len(runes) / 3
+	parts := []string{string(runes[:third]), string(runes[third : 2*third]), string(runes[2*third:])}
+	for _, part := range parts {
+		writeEvent(w, map[string]any{"choices": []map[string]any{{"delta": map[string]any{"content": part}}}})
+	}
+	writeEvent(w, map[string]any{"choices": []map[string]any{{"delta": map[string]any{}, "finish_reason": finishReason}}})
+	writeEvent(w, map[string]any{"choices": []any{}, "usage": map[string]any{"prompt_tokens": 100, "completion_tokens": 50}})
+	fmt.Fprint(w, "data: [DONE]\n\n")
+}
+
+func writeEvent(w http.ResponseWriter, event any) {
+	b, _ := json.Marshal(event)
+	fmt.Fprintf(w, "data: %s\n\n", b)
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+// shortDeepInfraTimeouts shrinks the stream timeouts so stall tests run quickly.
+func shortDeepInfraTimeouts(t *testing.T) {
+	firstData, idle, maxDuration := deepInfraFirstDataTimeout, deepInfraIdleTimeout, deepInfraMaxDuration
+	deepInfraFirstDataTimeout, deepInfraIdleTimeout, deepInfraMaxDuration = 100*time.Millisecond, 100*time.Millisecond, 5*time.Second
+	t.Cleanup(func() {
+		deepInfraFirstDataTimeout, deepInfraIdleTimeout, deepInfraMaxDuration = firstData, idle, maxDuration
 	})
 }
 

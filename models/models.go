@@ -8,6 +8,7 @@ type RecipeJob struct {
     Type    string
     User_id int
     ParsedJSON []byte // parse result already returned by the model, reused on retry
+    Transcript string // image jobs: text already read from the photos, reused on retry
 }
 
 type RawIngredient struct {

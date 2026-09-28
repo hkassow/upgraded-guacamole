@@ -1,0 +1,1 @@
+ALTER TABLE recipe_jobs ADD COLUMN IF NOT EXISTS transcript TEXT;
