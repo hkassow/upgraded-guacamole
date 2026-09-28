@@ -1,66 +1,35 @@
-const SHOPPING_LIST_UNIT_INFO = {
-	teaspoon: { key: 'volume', toBase: 4.92892 },
-	tablespoon: { key: 'volume', toBase: 14.7868 },
-	cup: { key: 'volume', toBase: 236.588 },
-	'fluid-ounce': { key: 'volume', toBase: 29.5735 },
-	milliliter: { key: 'volume', toBase: 1 },
-	liter: { key: 'volume', toBase: 1000 },
-	gram: { key: 'weight', toBase: 1 },
-	kilogram: { key: 'weight', toBase: 1000 },
-	ounce: { key: 'weight', toBase: 28.3495 },
-	pound: { key: 'weight', toBase: 453.592 },
-};
+// Totals are kept in base units per family: volume in ml, weight in g, count as-is.
+// Parsing, unit conversions and the density table live in conversions.js.
+
+// "2", "1.5", no trailing ".00"
+function trimQuantity(value) {
+	return String(Number(value.toFixed(2)));
+}
 
 function formatBaseQuantity(key, baseQty) {
 	switch (key) {
 		case 'weight':
-			return baseQty >= 1000 ? `${(baseQty / 1000).toFixed(2)}kg` : `${Math.round(baseQty)}g`;
+			return baseQty >= 1000 ? `${trimQuantity(baseQty / 1000)}kg` : `${Math.round(baseQty)}g`;
 		case 'volume':
-			if (baseQty >= 236.588) return `${(baseQty / 236.588).toFixed(2)} cups`;
-			if (baseQty >= 14.7868) return `${(baseQty / 14.7868).toFixed(2)} tbsp`;
-			return `${(baseQty / 4.92892).toFixed(2)} tsp`;
-		case 'count':
-			return `${baseQty}`;
+			// "⅔ cup" rather than "10.67 tbsp"; spoons only below a quarter cup
+			if (baseQty >= 236.588 / 4) return IngredientConversions.formatCups(baseQty);
+			if (baseQty >= 14.7868) return `${trimQuantity(baseQty / 14.7868)} tbsp`;
+			return `${trimQuantity(baseQty / 4.92892)} tsp`;
 		default:
-			return `${baseQty}`;
+			return trimQuantity(baseQty);
 	}
 }
 
-// parseShoppingAmount parses one Amount string - including compound amounts
-// like "¾ cup plus 1 tablespoon" - into base-unit totals per family key.
-// Returns null if any chunk can't be confidently parsed or uses a unit not
-// in SHOPPING_LIST_UNIT_INFO
+// parseShoppingAmount turns one amount into base-unit totals: "½ cup plus 2 tbsp" -> { volume: 148 },
+// "150 gr" -> { weight: 150 }, "3" -> { count: 3 }. Only a bare number counts as a count, so an
+// unfamiliar unit is never added up as if it were a number of items. Returns null for anything it
+// can't read confidently ("a pinch", "2-3 cups", "1 can") - those are listed as written instead.
 function parseShoppingAmount(raw) {
-	const trimmed = (raw || '').trim();
-	if (!trimmed) return null;
+	const measured = IngredientConversions.parseAmount(raw);
+	if (measured) return { [measured.family]: measured.base };
 
-	const totals = {};
-
-	for (const chunk of trimmed.split(' plus ')) {
-		const results = ParseIngredient.parseIngredient(chunk.trim() + ' flour', { normalizeUOM: true });
-		const parsed = results[0];
-		if (!parsed || parsed.quantity == null) return null;
-
-		if (parsed.unitOfMeasureID == null) {
-			console.log('no measureID', chunk)
-			console.log('checking unitOfMeasure: ', parsed.unitOfMeasure)
-			// No unit recognized -> treat as a bare count, e.g. "3" (for "3 eggs").
-			totals.count = (totals.count ?? 0) + parsed.quantity;
-			continue;
-		}
-
-		const info = SHOPPING_LIST_UNIT_INFO[parsed.unitOfMeasureID];
-		if (!info) {
-			console.warn(
-				`shopping-list: unrecognized unit "${parsed.unitOfMeasureID}" (from "${chunk}") - add it to SHOPPING_LIST_UNIT_INFO`
-			);
-			return null;
-		}
-
-		totals[info.key] = (totals[info.key] ?? 0) + parsed.quantity * info.toBase;
-	}
-
-	return totals;
+	const count = IngredientConversions.parseCount(raw);
+	return count === null ? null : { count };
 }
 
 // buildShoppingList groups ingredients by name (case-insensitive) and sums

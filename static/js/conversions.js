@@ -314,10 +314,22 @@ const IngredientConversions = (() => {
         m = text.match(new RegExp(`^(\\d+)?\\s*([${FRACTION_CHARS}])`));
         if (m) return { value: (m[1] ? Number(m[1]) : 0) + FRACTIONS[m[2]], rest: text.slice(m[0].length) };
 
-        m = text.match(/^\d+(?:\.\d+)?|^\.\d+/);
-        if (m) return { value: Number(m[0]), rest: text.slice(m[0].length) };
+        // "7.5" or European "7,5" (a comma followed by 3 digits is a thousands separator, not handled)
+        m = text.match(/^(\d+)[.,](\d{1,2})(?!\d)|^\d+(?:\.\d+)?|^\.\d+/);
+        if (m) {
+            const value = m[2] !== undefined ? Number(`${m[1]}.${m[2]}`) : Number(m[0]);
+            return { value, rest: text.slice(m[0].length) };
+        }
 
         return null;
+    }
+
+    // a count with no unit, e.g. "3" (eggs) or "1½" -> 1.5; null if there's anything else in it
+    function parseCount(amount) {
+        let text = String(amount || '').trim().toLowerCase();
+        while (AMOUNT_PREFIX.test(text)) text = text.replace(AMOUNT_PREFIX, '');
+        const number = parseNumber(text);
+        return number && number.value > 0 && number.rest.trim() === '' ? number.value : null;
     }
 
     // one "number unit" piece, e.g. "½ cup" -> { family: 'volume', base: 118.3 }
@@ -433,7 +445,7 @@ const IngredientConversions = (() => {
     }
 
     return {
-        lookup, parseAmount, alternativeAmount, combineTotals, formatGrams, formatMl, formatCups, normalizeName,
+        lookup, parseAmount, parseCount, alternativeAmount, combineTotals, formatGrams, formatMl, formatCups, normalizeName,
         table: INGREDIENT_DENSITIES, // exposed for tests
     };
 })();

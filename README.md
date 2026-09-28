@@ -22,7 +22,7 @@ scripts/test-backend.sh -v -run TestUpdateRecipe
 # Frontend tests
 node --test tests/
 
-- plain node, no npm install needed (tests for static/js/conversions.js)
+- plain node, no npm install needed (tests for static/js/conversions.js and grocery-list.js)
 
 # Production
 upgraded-guacamole.com

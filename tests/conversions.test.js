@@ -25,6 +25,15 @@ test('parses amounts the parser produces', () => {
     assert.equal(ml('scant ¾ cup'), 177);
 
     assert.deepEqual(conversions.parseAmount('250g'), { family: 'weight', base: 250, metric: true });
+    assert.equal(conversions.parseAmount('150 gr').base, 150);
+    assert.equal(conversions.parseAmount('7,5 gr').base, 7.5);
+    assert.equal(conversions.parseAmount('1,000 g'), null); // thousands separators aren't guessed at
+
+    assert.equal(conversions.parseCount('3'), 3);
+    assert.equal(conversions.parseCount('1½'), 1.5);
+    assert.equal(conversions.parseCount('about 6'), 6);
+    assert.equal(conversions.parseCount('150 gr'), null);
+    assert.equal(conversions.parseCount('2 large'), null);
     assert.equal(Math.round(conversions.parseAmount('10 ounces').base), 283);
     assert.equal(Math.round(conversions.parseAmount('1 lb').base), 454);
     assert.equal(conversions.parseAmount('1.2 kg').base, 1200);
