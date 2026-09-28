@@ -1062,7 +1062,9 @@ function createRecipeModal(card, recipe) {
         const ul = document.createElement('ul');
         sectionIngredients.forEach(ing => {
             const li = document.createElement('li');
-            li.textContent = `${ing.amount} ${ing.alt_amount? '(' + ing.alt_amount + ') ' : ''}${ing.name} ${ing.preparation_notes || ''}`.trim();
+            // the recipe's own alternative amount wins; otherwise estimate grams/cups/ml for common ingredients
+            const altAmount = ing.alt_amount || IngredientConversions.alternativeAmount(ing.name, ing.amount);
+            li.textContent = `${ing.amount} ${altAmount ? '(' + altAmount + ') ' : ''}${ing.name} ${ing.preparation_notes || ''}`.trim();
             ul.appendChild(li);
         });
         ingredientsList.appendChild(ul);

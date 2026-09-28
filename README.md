@@ -19,6 +19,11 @@ scripts/test-backend.sh -v -run TestUpdateRecipe
 - DeepInfra is replaced by a fake server, so tests never call the real API
 - plain `go test ./...` still runs the non-database tests and skips the rest
 
+# Frontend tests
+node --test tests/
+
+- plain node, no npm install needed (tests for static/js/conversions.js)
+
 # Production
 upgraded-guacamole.com
 
@@ -34,46 +39,17 @@ upgraded-guacamole.com
         1. things that dont need to be seperated out (eggs)
         2. things that should be in ML ie; liquids, milk, cream etc
         3. things that should be in grams ie; butter, flour, sugar
-    - dont do if followed by celsius conversion
+
+
+
 - continue testing deepinfra
     - maybe we can use a smarter/ more expensive text model for better parsing ?
-
-- filter recipe types
-    - your recipes
-    - recipes of people you follow
-    - show all recipes
-    - show recipes with certain ingredients
-    - allow tagging recipes for further filtering
-        - vegan
-        - vegetarian
-        - dinner
-        - lunch
-        - dessert
-        - baking 
-        - bread
-        - snack
-        - side
-        - probably just let users create their own tags
-            - need tag_join table
-                id
-                hashid
-                tag_id
-                type #recipe, ingredient, etc -> future proof incase we need to tag anything other than recipe
-                other_id
-
-            - tag table
-                id
-                tag -> string
 
 - custom logging function
     - maintains two logs
         - all logs
         - error logs
     - still outputs docker logs
-
-- add a error state to to-be parsed recipes
-    - this way recipe wont continue to be retried
-    - add field for storing output of recipes
 
 - maybe limit random users from uploading too many recipes
     - unknown user can upload as many recipes

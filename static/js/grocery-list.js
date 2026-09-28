@@ -96,9 +96,26 @@ function buildShoppingList(ingredients) {
 
 	return order.map((key) => {
 		const group = groups.get(key);
-		const lines = Object.entries(group.totals).map(([k, qty]) => formatBaseQuantity(k, qty));
+		const lines = shoppingTotalLines(group.displayName, group.totals);
 		lines.push(...group.leftover);
 		return { name: group.displayName, lines };
+	});
+}
+
+// For common ingredients (see conversions.js) cups and grams are merged into one total in the unit
+// you'd shop with: "1 cup + 100 g sugar" -> "≈ 300 g", liquids in ml. Everything else is unchanged.
+function shoppingTotalLines(name, totals) {
+	const combined = IngredientConversions.combineTotals(name, totals);
+	if (!combined) {
+		return Object.entries(totals).map(([k, qty]) => formatBaseQuantity(k, qty));
+	}
+
+	const prefix = combined.converted ? '≈ ' : '';
+	return Object.entries(combined.totals).map(([k, qty]) => {
+		// exact weights keep their exact grams; only estimates get rounded
+		if (k === 'weight') return combined.converted ? prefix + IngredientConversions.formatGrams(qty) : formatBaseQuantity(k, qty);
+		if (k === 'volume') return prefix + IngredientConversions.formatMl(qty);
+		return formatBaseQuantity(k, qty);
 	});
 }
 
