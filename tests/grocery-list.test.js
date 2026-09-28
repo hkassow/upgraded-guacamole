@@ -9,7 +9,7 @@ const vm = require('node:vm');
 // loaded first as a global
 const context = vm.createContext({ IngredientConversions: require('../static/js/conversions.js') });
 vm.runInContext(fs.readFileSync(path.join(__dirname, '../static/js/grocery-list.js'), 'utf8'), context);
-const { buildShoppingList, parseShoppingAmount } = context;
+const { buildShoppingList, buildIngredientCollection, parseShoppingAmount } = context;
 
 const linesFor = (list, name) => list.find(item => item.name === name)?.lines;
 
@@ -56,6 +56,35 @@ test('combines the brioche and babka amounts correctly', () => {
     // not in the density table: grams and counts stay separate instead of being added together
     assert.deepEqual([...linesFor(list, 'eggs')], ['150g', '3']);
     assert.deepEqual([...linesFor(list, 'yeast')], ['8g', '2 tsp']);
+});
+
+test('lists every original amount per ingredient for sanity checking', () => {
+    const ingredientsById = {
+        1: { name: 'butter', location: 'dairy', category: 'dairy' },
+        2: { name: 'Butter', location: 'dairy', category: 'dairy' }, // same ingredient, different case
+        3: { name: 'salt', location: 'pantry', category: 'seasoning' },
+        4: { name: 'orange zest', location: 'produce' },
+    };
+    const recipesById = {
+        10: { title: 'Brioche', ingredients: [
+            { ingredient_id: 1, amount: '150 gr' },
+            { ingredient_id: 3, amount: '9 gr' },
+        ] },
+        11: { title: 'Babka', ingredients: [
+            { ingredient_id: 2, amount: '½ cup plus 2 tablespoons' },
+            { ingredient_id: 1, amount: '' }, // "extra softened, for greasing"
+            { ingredient_id: 3, amount: '1 teaspoon' },
+            { ingredient_id: 4, amount: '' },
+        ] },
+    };
+
+    const collection = buildIngredientCollection([10, 11], recipesById, ingredientsById);
+
+    assert.deepEqual(JSON.parse(JSON.stringify(collection.originalAmounts)), [
+        { name: 'butter', amounts: ['150 gr', '½ cup plus 2 tablespoons'], total: '≈ 290 g' },
+        { name: 'orange zest', amounts: [], total: '' },
+        { name: 'salt', amounts: ['9 gr', '1 teaspoon'], total: '9g + 1 tsp' },
+    ]);
 });
 
 test('formats volumes without trailing zeros', () => {

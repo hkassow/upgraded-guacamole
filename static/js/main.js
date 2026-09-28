@@ -209,7 +209,8 @@ function submitGroceryList() {
 function printIngredientCollection(ingredient_collection) {
 	let output = "";
 
-	const { byRecipe, ...locationBuckets } = ingredient_collection;
+	// everything that isn't byRecipe / originalAmounts is a store location bucket
+	const { byRecipe, originalAmounts, ...locationBuckets } = ingredient_collection;
  
 	const sortedKeys = Object.keys(locationBuckets).sort();
  
@@ -235,7 +236,17 @@ function printIngredientCollection(ingredient_collection) {
 			output += "\n\n";
 		});
 	}
- 
+
+	// every amount as written, to check the merged totals above against
+	if (originalAmounts && originalAmounts.length > 0) {
+		output += "--- Original amounts by ingredient ---\n\n";
+		originalAmounts.forEach(({ name, amounts, total }) => {
+			const written = amounts.length ? amounts.join(', ') : 'no amount';
+			output += ` - ${name}: ${written}${total ? ` → ${total}` : ''}\n`;
+		});
+		output += "\n";
+	}
+
 	const groceryModal = document.querySelector("#groceryListModal");
 	openModal(groceryModal);
 	const groceryText = document.querySelector("#groceryListText");

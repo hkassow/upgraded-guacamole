@@ -170,6 +170,28 @@ function buildIngredientCollection(recipeIds, recipesById, ingredientsById) {
 	});
 
 	collection.byRecipe = byRecipe;
+	collection.originalAmounts = buildOriginalAmounts(flat);
 
 	return collection;
+}
+
+// For sanity-checking the merged list: every ingredient (seasonings included) with each amount
+// exactly as the recipes wrote it, plus the combined total when there was more than one.
+// Returns [{ name, amounts: ['150 gr', '½ cup plus 2 tablespoons'], total: '≈ 290 g' }], sorted by name.
+function buildOriginalAmounts(flat) {
+	const groups = new Map();
+	flat.forEach(({ name, amount }) => {
+		const key = name.trim().toLowerCase();
+		if (!groups.has(key)) groups.set(key, { name: name.trim(), amounts: [] });
+		if (amount.trim()) groups.get(key).amounts.push(amount.trim());
+	});
+
+	return [...groups.values()]
+		.sort((a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }))
+		.map(({ name, amounts }) => {
+			const total = amounts.length > 1
+				? buildShoppingList(amounts.map(amount => ({ name, amount })))[0].lines.join(' + ')
+				: '';
+			return { name, amounts, total };
+		});
 }
