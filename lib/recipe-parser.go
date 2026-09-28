@@ -70,7 +70,8 @@ Return **only valid JSON**, using the following schema:
 2. Extract EVERY ingredient listed in the input's ingredients list section - do not skip or omit any ingredients. Do NOT create additional ingredient entries from mentions inside the steps (see INGREDIENT RULE 7 below).
 3. If no steps are found, return: "steps": {"main": []}
 4. If no ingredients are found, return: "ingredients": []
-5. Do not add, invent, or infer steps or ingredients that are not in the original text.
+5. Do not add, invent, or infer steps or ingredients that are not in the original text. The ONLY
+   exception is the short "Make the <component>" steps described in STEP PARSING RULE 7.
 6. If no step uses any ingredients, return: "ingredients_used_for_step": {}
  
 ### STEP PARSING RULES
@@ -78,6 +79,7 @@ Return **only valid JSON**, using the following schema:
 1. Preserve each step EXACTLY as written.
    - Do NOT shorten, simplify, summarize, or rewrite steps.
    - Only convert them into JSON strings in their original form.
+   - (The only added text is the "Make the <component>" steps from rule 7.)
  
 2. Group steps by components when they exist.
    Examples of components:
@@ -98,10 +100,41 @@ Return **only valid JSON**, using the following schema:
      create a JSON key using the component name, e.g.:
        "sauce": [ ... steps ... ]
    - If no component headings are present, **all steps go under ` + "`\"main\"`" + `**.
- 
+   - Name the key after the recipe's own heading, lowercase, with words separated by spaces:
+     "Cream filling" → "cream filling", "For the whiskey syrup" → "whiskey syrup".
+
 5. Remove numbering (e.g. "1.", "Step 1", "•") but keep the original sentences.
- 
+
 6. Each step must remain a complete, standalone instruction.
+
+7. Point the main steps at the other components:
+   - Recipes often list a component (a syrup, filling, sauce...) in its own section - frequently
+     at the END of the recipe - even though a "main" step needs it earlier. Without a pointer the
+     reader never learns when to make it.
+   - For each component other than "main": if a "main" step uses the finished component (e.g.
+     "brush the layer with the whiskey syrup", "spoon in the cream filling") and no earlier
+     "main" step already says to make it, INSERT one short step into "main" directly BEFORE the
+     first "main" step that uses it, worded exactly like:
+       "Make the whiskey syrup (see the Whiskey syrup steps)."
+     using the component's key, with the first letter capitalized inside the parentheses.
+   - Insert at most ONE such step per component. If several components are first used in the
+     same step, insert one step for each, in the order they are mentioned.
+   - Do NOT move, copy, or change the component's own steps - they stay under its own key.
+   - The inserted steps count like any other step when numbering "ingredients_used_for_step",
+     and they list no ingredients.
+   - Example - the recipe's instructions are:
+       1. Bake the cookie layers.
+       2. Brush each layer with the whiskey syrup and spread with the cream filling.
+       Cream filling: Beat the cream cheese and sugar...
+       Whiskey syrup: Simmer the honey and whiskey...
+     → "main": [
+         "Bake the cookie layers.",
+         "Make the whiskey syrup (see the Whiskey syrup steps).",
+         "Make the cream filling (see the Cream filling steps).",
+         "Brush each layer with the whiskey syrup and spread with the cream filling."
+       ],
+       "cream filling": ["Beat the cream cheese and sugar..."],
+       "whiskey syrup": ["Simmer the honey and whiskey..."]
  
 ---
 
@@ -114,8 +147,9 @@ and how much of each. It is keyed first by the same component keys as "steps" ("
 (the first step is "1", the second is "2", and so on - count carefully).
  
 1. Only include a step's key if that step actually adds/uses ingredients. Steps with no
-   ingredients (e.g. "Preheat the oven", "Let cool for 10 minutes") get NO key at all -
-   do not include empty arrays.
+   ingredients (e.g. "Preheat the oven", "Let cool for 10 minutes", and the inserted "Make the
+   <component>" steps) get NO key at all - do not include empty arrays. Step numbers count
+   the inserted "Make the <component>" steps too.
  
 2. List an ingredient only in the step where it is added or used from its raw form.
    Once ingredients have been combined into a mixture, later steps that refer to that
@@ -186,6 +220,16 @@ Example - given ingredients "1½ cups sugar", "2 cups flour", "1 tsp vanilla ext
      * "yellow onion" → name: "onion", add "yellow" to preparation_notes
    - Keep only the base ingredient name in the ` + "`\"name\"`" + ` field.
    - Move removed descriptors to ` + "`\"preparation_notes\"`" + `.
+   - EXCEPTION - keep the descriptor in the name when it makes a DIFFERENT product that is
+     bought separately, not just a variety of the same thing:
+     * "granulated sugar", "brown sugar", "dark brown muscovado sugar", "powdered sugar"
+     * "heavy cream", "sour cream", "cream cheese"
+     * "all-purpose flour", "bread flour", "baking soda", "baking powder"
+   - If the ingredients list has the same base ingredient more than once with different
+     descriptors, EVERY one of those entries keeps its descriptor in the name so they can be
+     told apart - never output two entries that are both just named "sugar":
+     * "½ cup granulated sugar" and "⅔ cup dark brown muscovado sugar"
+       → names "granulated sugar" and "dark brown muscovado sugar"
  
 2. Preserve preparation descriptors:
    - "thinly sliced", "softened", "beaten", "melted", "chopped", "diced", etc.
@@ -205,6 +249,9 @@ Example - given ingredients "1½ cups sugar", "2 cups flour", "1 tsp vanilla ext
        "diced", "sliced", "shredded", "grated", "minced", "crushed", "beaten",
        "melted", "softened", "cubed", "peeled", etc.
    - Everything after the unit goes into preparation_notes, NOT amount
+   - Words about HOW to measure ("packed", "heaping", "level", "scant", "generous") are not part
+     of the amount - put them in preparation_notes:
+     * "packed ⅔ cup dark brown sugar" → amount: "⅔ cup", preparation_notes: "packed"
    - If quantity exists: put it into ` + "`\"amount\"`" + `.
    - If none exists, leave ` + "`\"amount\": \"\"`" + `.
  

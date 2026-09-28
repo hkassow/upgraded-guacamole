@@ -747,7 +747,38 @@ function recipeComponents(recipe) {
 }
 
 function capitalizeComponent(component) {
-    return component.charAt(0).toUpperCase() + component.slice(1);
+    const name = component.replace(/_/g, ' ');
+    return name.charAt(0).toUpperCase() + name.slice(1);
+}
+
+// "½ cup" + "granulated sugar" -> "½ cup granulated sugar", "remaining" -> "remaining granulated sugar"
+function formatStepIngredient(ing) {
+    return [ing.amount, ing.name].map(s => (s || '').trim()).filter(Boolean).join(' ');
+}
+
+// one instruction step, with the ingredients it uses listed underneath (from step_ingredients,
+// which is keyed by section and 1-based step number)
+function createStepItem(recipe, component, index, text) {
+    const li = document.createElement('li');
+    const stepText = document.createElement('div');
+    stepText.textContent = text;
+    li.appendChild(stepText);
+
+    const used = (recipe.step_ingredients?.[component]?.[String(index + 1)] || [])
+        .map(formatStepIngredient)
+        .filter(Boolean);
+    if (used.length) {
+        const list = document.createElement('ul');
+        list.className = 'step-ingredients';
+        list.setAttribute('aria-label', 'Ingredients for this step');
+        used.forEach(text => {
+            const item = document.createElement('li');
+            item.textContent = text;
+            list.appendChild(item);
+        });
+        li.appendChild(list);
+    }
+    return li;
 }
 
 function createRecipeModal(card, recipe) {
@@ -939,12 +970,10 @@ function createRecipeModal(card, recipe) {
 	    let rows = 1;
 
         const mainOl = document.createElement('ol');
-        recipe.steps.main.forEach(step => {
+        recipe.steps.main.forEach((step, index) => {
             // edit box shows the same converted text so it matches what's displayed
             const displayStep = addTemperatureConversions(step);
-            const li = document.createElement('li');
-            li.textContent = displayStep;
-            mainOl.appendChild(li);
+            mainOl.appendChild(createStepItem(recipe, 'main', index, displayStep));
 	        if (fullInstructions) {
 	    	    fullInstructions += '\n\n';
 	        }
@@ -969,18 +998,16 @@ function createRecipeModal(card, recipe) {
     
         const section = document.createElement('div');
         const title = document.createElement('h3');
-        title.textContent = component.charAt(0).toUpperCase() + component.slice(1);
+        title.textContent = capitalizeComponent(component);
         section.appendChild(title);
 
         let fullInstructions = '';
         let rows = 1;
-    
+
         const ol = document.createElement('ol');
-        steps.forEach(step => {
+        steps.forEach((step, index) => {
             const displayStep = addTemperatureConversions(step);
-            const li = document.createElement('li');
-            li.textContent = displayStep;
-            ol.appendChild(li);
+            ol.appendChild(createStepItem(recipe, component, index, displayStep));
             if (fullInstructions) {
                 fullInstructions += '\n\n';
             }
@@ -991,7 +1018,7 @@ function createRecipeModal(card, recipe) {
     stepsContainer.appendChild(section);
 	
 	const label = document.createElement('label');
-	label.textContent = component.charAt(0).toUpperCase() + component.slice(1);
+	label.textContent = capitalizeComponent(component);
 	const editBox = document.createElement('textarea');
 	editBox.textContent = fullInstructions;
 	editBox.className = 'edit-instructions';

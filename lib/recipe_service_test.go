@@ -399,6 +399,32 @@ func TestUpdateRecipeSteps(t *testing.T) {
 	if !reflect.DeepEqual(after.Steps, want) {
 		t.Errorf("steps = %q, want %q", after.Steps, want)
 	}
+	// same number of steps, so the per-step ingredients still line up and are kept
+	if !reflect.DeepEqual(after.StepIngredients, sampleParsed().IngredientsUsedForStep) {
+		t.Errorf("step ingredients = %+v, want unchanged", after.StepIngredients)
+	}
+}
+
+func TestUpdateRecipeStepCountChangeClearsStepIngredients(t *testing.T) {
+	ctx := testutil.SetupDB(t)
+	alice := testutil.CreateUser(t, ctx, "alice")
+	r := saveSample(t, ctx, alice, "Chicken")
+
+	// main goes from 2 steps to 3, so its step numbers no longer match
+	err := UpdateRecipe(ctx, r.ID, alice.ID, models.UpdateRecipeRequest{
+		UpdatedSteps: []models.UpdatedStep{{StepName: "main", NewSteps: "Preheat the oven.\nSeason the chicken.\nRoast for 30 minutes."}},
+	})
+	if err != nil {
+		t.Fatalf("UpdateRecipe: %v", err)
+	}
+
+	after := recipeByTitle(t, ctx, alice.ID, "Chicken")
+	if _, ok := after.StepIngredients["main"]; ok {
+		t.Errorf("main step ingredients = %+v, want cleared", after.StepIngredients["main"])
+	}
+	if !reflect.DeepEqual(after.StepIngredients["sauce"], sampleParsed().IngredientsUsedForStep["sauce"]) {
+		t.Errorf("sauce step ingredients = %+v, want untouched", after.StepIngredients["sauce"])
+	}
 }
 
 func TestUpdateRecipeComponent(t *testing.T) {

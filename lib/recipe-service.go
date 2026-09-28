@@ -247,7 +247,16 @@ func UpdateRecipe(ctx context.Context, recipeID int, userID int, req models.Upda
             continue
         }
 
-        steps[key] = cleanStepLines(stepUpdate.NewSteps)
+        newStepLines := cleanStepLines(stepUpdate.NewSteps)
+
+        // step ingredients are keyed by step number; if steps were added or removed the numbers
+        // no longer line up, so drop them rather than show ingredients under the wrong step
+        if _, ok := stepIngredients[key]; ok && len(newStepLines) != len(steps[key]) {
+            delete(stepIngredients, key)
+            stepIngredientsChanged = true
+        }
+
+        steps[key] = newStepLines
     }
 
     for _, ing := range req.UpdatedIngredients {
