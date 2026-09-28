@@ -25,4 +25,3 @@ func LoadSecret(secretEnvVar string) (string, error) {
 
 	return "", fmt.Errorf("secret %s not found", secretEnvVar)
 }
-

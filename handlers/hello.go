@@ -2,18 +2,19 @@ package handlers
 
 import (
 	"encoding/json"
-	"net/http"
-	"log"
-	"strings"
 	"fmt"
+	"log"
+	"net/http"
+	"strings"
 )
 
 type Response struct {
 	Message string `json:"message"`
 }
+
 func Hello(name string) string {
-    message := fmt.Sprintf("Hello hunter, %v. Welcome!", name)
-    return message
+	message := fmt.Sprintf("Hello hunter, %v. Welcome!", name)
+	return message
 }
 
 func HelloHandler(w http.ResponseWriter, r *http.Request) {
@@ -23,11 +24,11 @@ func HelloHandler(w http.ResponseWriter, r *http.Request) {
 	if name == "" {
 		name = "World"
 	}
-	
+
 	response := Response{
 		Message: Hello(name),
 	}
-	
+
 	json.NewEncoder(w).Encode(response)
 
 	log.Println("Hello backend")

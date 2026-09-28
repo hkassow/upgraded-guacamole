@@ -1,17 +1,20 @@
 package handlers
 
 import (
-    "encoding/json"
-    "net/http"
-    "log"
+	"crypto/rand"
+	"crypto/subtle"
+	"encoding/base64"
+	"encoding/json"
+	"log"
+	"net/http"
 
+	"github.com/gorilla/sessions"
+	"github.com/jackc/pgx/v5"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
-	"github.com/gorilla/sessions"
-    "github.com/jackc/pgx/v5"
 
 	"go-guacamole/db"
-    "go-guacamole/lib"
+	"go-guacamole/lib"
 )
 
 var googleOauthConfig *oauth2.Config
@@ -47,31 +50,77 @@ func InitGoogle() {
 	}
 }
 
-func GoogleLogin(w http.ResponseWriter, r *http.Request) {
-    session, _ := store.Get(r, "oauth-state")
+// The login flow sends Google a random "state" value and keeps a copy in this short-lived cookie.
+// The callback only accepts a login whose state matches, so another site can't make your browser
+// finish a login it started (login CSRF - e.g. logging you into the attacker's account).
+const oauthStateSession = "oauth-state"
 
-	state := "random-state" // ideally replace with crypto/rand string
+func oauthStateCookieOptions(maxAge int) *sessions.Options {
+	return &sessions.Options{
+		Path:     "/auth/google", // only sent to the login and callback URLs
+		MaxAge:   maxAge,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode, // still sent on the redirect back from Google
+	}
+}
+
+func GoogleLogin(w http.ResponseWriter, r *http.Request) {
+	stateBytes := make([]byte, 32)
+	if _, err := rand.Read(stateBytes); err != nil {
+		http.Error(w, "Failed to start login", http.StatusInternalServerError)
+		return
+	}
+	state := base64.RawURLEncoding.EncodeToString(stateBytes)
+
+	session, _ := store.Get(r, oauthStateSession)
 	session.Values["state"] = state
-	session.Save(r, w)
+	session.Options = oauthStateCookieOptions(10 * 60)
+	if err := session.Save(r, w); err != nil {
+		http.Error(w, "Failed to start login", http.StatusInternalServerError)
+		return
+	}
 
 	url := googleOauthConfig.AuthCodeURL(state)
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 }
 
+// validOAuthState checks the callback's state against the cookie set by GoogleLogin, and clears
+// the cookie so a state can only be used once.
+func validOAuthState(w http.ResponseWriter, r *http.Request) bool {
+	session, err := store.Get(r, oauthStateSession)
+	if err != nil {
+		return false
+	}
+	expected, _ := session.Values["state"].(string)
+
+	delete(session.Values, "state")
+	session.Options = oauthStateCookieOptions(-1)
+	session.Save(r, w)
+
+	got := r.URL.Query().Get("state")
+	return expected != "" && subtle.ConstantTimeCompare([]byte(expected), []byte(got)) == 1
+}
+
 func GoogleCallback(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-    pool := db.Pool
+	pool := db.Pool
 
-    // 1. Exchange OAuth code
+	if !validOAuthState(w, r) {
+		http.Error(w, "Login expired or invalid, please try logging in again", http.StatusBadRequest)
+		return
+	}
+
+	// 1. Exchange OAuth code
 	code := r.URL.Query().Get("code")
 
 	token, err := googleOauthConfig.Exchange(ctx, code)
 	if err != nil {
 		http.Error(w, "OAuth exchange failed", 500)
 		return
-    }
+	}
 
-    // 2. Get user info from Google
+	// 2. Get user info from Google
 	client := googleOauthConfig.Client(ctx, token)
 
 	resp, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
@@ -87,14 +136,14 @@ func GoogleCallback(w http.ResponseWriter, r *http.Request) {
 		Name  string `json:"name"`
 	}
 
-    if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
 		http.Error(w, "Failed parsing user info", 500)
 		return
 	}
-    
-    log.Println("Processing oauth:", userInfo.ID, userInfo.Email, userInfo.Name)
 
-    // 3. Find or create user in DB
+	log.Println("Processing oauth:", userInfo.ID, userInfo.Email, userInfo.Name)
+
+	// 3. Find or create user in DB
 	var userID int
 
 	err = pool.QueryRow(ctx,
@@ -125,9 +174,8 @@ func GoogleCallback(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	
-    // 4. Create session
-    if err := CreateSession(w, r, userID); err != nil {
+	// 4. Create session
+	if err := CreateSession(w, r, userID); err != nil {
 		http.Error(w, "Failed creating session", 500)
 		return
 	}
@@ -137,19 +185,19 @@ func GoogleCallback(w http.ResponseWriter, r *http.Request) {
 }
 
 func CreateSession(w http.ResponseWriter, r *http.Request, userID int) error {
-    session, _ := store.Get(r, "session")
+	session, _ := store.Get(r, "session")
 
-    session.Values["user_id"] = userID
+	session.Values["user_id"] = userID
 
-    session.Options = &sessions.Options{
-        Path:     "/",
-        MaxAge:   86400 * 30,
-        HttpOnly: true,
-        Secure:   true,
-        SameSite: http.SameSiteLaxMode,
-    }
+	session.Options = &sessions.Options{
+		Path:     "/",
+		MaxAge:   86400 * 30,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	}
 
-    return session.Save(r, w)
+	return session.Save(r, w)
 }
 
 func MeHandler(w http.ResponseWriter, r *http.Request) {
@@ -163,11 +211,10 @@ func MeHandler(w http.ResponseWriter, r *http.Request) {
 
 	// fetch user from DB
 	var user struct {
-		Uuid 		string
+		Uuid        string
 		DisplayName string
 		Email       string
 	}
-
 
 	err := db.Pool.QueryRow(r.Context(),
 		`SELECT uuid, display_name, email FROM users WHERE id = $1`,

@@ -3,3 +3,4 @@ secrets/**
 tmp/**
 backups/**
 cache_bust.sh
+PROD-README.md

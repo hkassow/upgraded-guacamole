@@ -5,12 +5,15 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/gorilla/sessions"
+	"golang.org/x/oauth2"
 
 	"go-guacamole/internal/testutil"
 	"go-guacamole/lib"
@@ -523,6 +526,106 @@ func TestFollowNewUser(t *testing.T) {
 	// alice now sees bob's recipes
 	if got := decodeRecipes(t, request(t, RecipesHandler, http.MethodGet, "/recipes", nil, &alice)); len(got) != 1 || got[0].Title != "Bob's bread" {
 		t.Errorf("alice's recipes after following bob = %+v", got)
+	}
+}
+
+func TestIngredientsTaggingRequiresLogin(t *testing.T) {
+	body := []IngredientUpdate{{ID: 1, Category: "baking"}}
+	expectStatus(t, request(t, IngredientsHandler, http.MethodPost, "/ingredients", body, nil), http.StatusUnauthorized)
+}
+
+// useTestOAuthConfig points the OAuth config at a local fake token endpoint that always refuses,
+// and returns how many times the callback tried to exchange a code with it.
+func useTestOAuthConfig(t *testing.T) *atomic.Int32 {
+	exchanges := &atomic.Int32{}
+	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		exchanges.Add(1)
+		http.Error(w, `{"error":"invalid_grant"}`, http.StatusBadRequest)
+	}))
+	t.Cleanup(tokenServer.Close)
+
+	previous := googleOauthConfig
+	googleOauthConfig = &oauth2.Config{
+		ClientID:    "test-client",
+		RedirectURL: "https://example.com/auth/google/callback",
+		// a fixed auth style, otherwise the oauth2 library retries a refused exchange a second way
+		Endpoint: oauth2.Endpoint{AuthURL: "https://accounts.example.com/auth", TokenURL: tokenServer.URL, AuthStyle: oauth2.AuthStyleInParams},
+	}
+	t.Cleanup(func() { googleOauthConfig = previous })
+	return exchanges
+}
+
+// startLogin runs GoogleLogin and returns the state it sent to Google and the state cookie it set.
+func startLogin(t *testing.T) (string, *http.Cookie) {
+	t.Helper()
+
+	rec := httptest.NewRecorder()
+	GoogleLogin(rec, httptest.NewRequest(http.MethodGet, "/auth/google/login", nil))
+	expectStatus(t, rec, http.StatusTemporaryRedirect)
+
+	redirect, err := url.Parse(rec.Header().Get("Location"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == oauthStateSession {
+			return redirect.Query().Get("state"), c
+		}
+	}
+	t.Fatal("GoogleLogin did not set the state cookie")
+	return "", nil
+}
+
+func TestGoogleLoginUsesRandomState(t *testing.T) {
+	useTestOAuthConfig(t)
+
+	first, cookie := startLogin(t)
+	second, _ := startLogin(t)
+	if len(first) < 40 || first == second {
+		t.Errorf("states %q and %q should be long and different every time", first, second)
+	}
+	if cookie.Path != "/auth/google" || !cookie.HttpOnly || !cookie.Secure || cookie.MaxAge <= 0 || cookie.MaxAge > 600 {
+		t.Errorf("state cookie = %+v, want short-lived, HttpOnly, Secure, scoped to /auth/google", cookie)
+	}
+}
+
+func TestGoogleCallbackRejectsBadState(t *testing.T) {
+	exchanges := useTestOAuthConfig(t)
+	state, cookie := startLogin(t)
+
+	callback := func(query string, withCookie bool) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, "/auth/google/callback?"+query, nil)
+		if withCookie {
+			req.AddCookie(cookie)
+		}
+		rec := httptest.NewRecorder()
+		GoogleCallback(rec, req)
+		return rec
+	}
+
+	// all rejected before the code is ever sent to Google
+	expectStatus(t, callback("code=abc", true), http.StatusBadRequest)                                // no state
+	expectStatus(t, callback("code=abc&state=random-state", true), http.StatusBadRequest)             // the old fixed value
+	expectStatus(t, callback("code=abc&state="+state+"x", true), http.StatusBadRequest)               // wrong state
+	expectStatus(t, callback("code=abc&state="+url.QueryEscape(state), false), http.StatusBadRequest) // login started elsewhere
+	if exchanges.Load() != 0 {
+		t.Fatalf("a callback with a bad state tried to exchange the code %d times", exchanges.Load())
+	}
+
+	// the right state gets past the check (the fake token endpoint then refuses the code)
+	rec := callback("code=abc&state="+url.QueryEscape(state), true)
+	expectStatus(t, rec, http.StatusInternalServerError)
+	if exchanges.Load() != 1 {
+		t.Errorf("token exchanges = %d, want 1 for the valid state", exchanges.Load())
+	}
+
+	// the callback clears the state, so it can't be replayed
+	var cleared bool
+	for _, c := range rec.Result().Cookies() {
+		cleared = cleared || (c.Name == oauthStateSession && c.MaxAge < 0)
+	}
+	if !cleared {
+		t.Error("callback did not clear the state cookie")
 	}
 }
 

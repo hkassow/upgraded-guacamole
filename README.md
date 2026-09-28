@@ -1,5 +1,5 @@
 ## upgraded-guacamole
-A recipe parser for storing recipes, uses vanilla go backend and vanilla javascript backend. 
+A recipe parser for storing recipes, uses vanilla go backend and vanilla javascript frontend. 
 Currently uses deepinfra api with Qwen models to handle image and text parsing
 
 # Run locally using docker
@@ -8,6 +8,35 @@ docker compose up --build
 docker compose down
 
 `127.0.0.1:8443`
+
+# Project layout
+```
+main.go                  routes, starts the db, migrations and recipe worker
+handlers/                HTTP handlers (recipes, ingredients, login/sessions, follows)
+lib/
+  recipe-service.go      recipes: create, read, update, delete
+  recipe-jobs.go         recipe_jobs rows (recipes waiting to be parsed)
+  recipe-worker.go       queue + worker that parses jobs and saves the recipe
+  recipe-parser.go       turning the model's JSON into a recipe and cleaning it up
+  recipe-prompts.go      the prompts sent to the models
+  deepinfra.go           DeepInfra client (streamed chat completions, photo transcription)
+  self-hosted-parser.go  client for the old gouda-woulda model server (not used right now)
+  tags.go                recipe tags
+  ingredients-service.go ingredient list + grocery tags
+db/                      connection, migrations (embedded into the binary)
+models/                  request/response structs shared by handlers and lib
+internal/testutil/       test database setup for the Go tests
+index.html               the whole page
+static/js/
+  main.js                page setup, recipe list, recipe popups, editing
+  filter.js              search / filter / tag filters for the recipe list
+  grocery-list.js        building the grocery list
+  conversions.js         cups <-> grams/ml (density table)
+  temperature.js         °F <-> °C in recipe steps
+tests/                   frontend tests (node --test tests/)
+scripts/                 test-backend.sh, backup-db.sh
+gouda-woulda/            old self-hosted ollama model server (separate Go module)
+```
 
 # Backend tests
 scripts/test-backend.sh
@@ -22,7 +51,7 @@ scripts/test-backend.sh -v -run TestUpdateRecipe
 # Frontend tests
 node --test tests/
 
-- plain node, no npm install needed (tests for static/js/conversions.js and grocery-list.js)
+- plain node, no npm install needed (tests for conversions.js, temperature.js and grocery-list.js)
 
 # Production
 upgraded-guacamole.com

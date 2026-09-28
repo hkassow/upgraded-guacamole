@@ -1,21 +1,21 @@
 package handlers
 
 import (
-    "encoding/json"
-    "errors"
-    "net/http"
+	"encoding/json"
+	"errors"
 	"log"
+	"net/http"
 
 	"go-guacamole/lib"
 	"go-guacamole/models"
 )
 
 type DeleteRecipeRequest struct {
-    RecipeID int `json:"recipe_id"`
+	RecipeID int `json:"recipe_id"`
 }
 
 func respondJSON(w http.ResponseWriter, data interface{}) {
-    json.NewEncoder(w).Encode(data)
+	json.NewEncoder(w).Encode(data)
 }
 
 func RecipesHandler(w http.ResponseWriter, r *http.Request) {
@@ -27,19 +27,19 @@ func RecipesHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		handlePostRecipe(w, r)
 	case http.MethodPatch:
-		handlePatchRecipe(w,r)
+		handlePatchRecipe(w, r)
 	case http.MethodDelete:
-	    handleDeleteRecipe(w, r)
+		handleDeleteRecipe(w, r)
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
 }
 
 func handleGetRecipes(w http.ResponseWriter, r *http.Request) {
-    ctx := r.Context()
+	ctx := r.Context()
 
 	recipesOf := r.URL.Query().Get("recipes_of")
-	
+
 	userID := 0
 	if recipesOf != "" {
 		userID = lib.GetUserIdByUuid(ctx, recipesOf)
@@ -48,20 +48,20 @@ func handleGetRecipes(w http.ResponseWriter, r *http.Request) {
 	if recipesOf == "" || userID == 0 {
 		userID = lib.GetUserID(r, store)
 	}
-    recipes, err := lib.GetAllRecipes(ctx, userID)
-    if err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
-        return
-    }
+	recipes, err := lib.GetAllRecipes(ctx, userID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
-    // relative to whoever is logged in (not the recipes_of user), so a share link never shows edit controls
-    viewerID := lib.GetUserID(r, store)
-    for i := range recipes {
-        recipes[i].IsMine = viewerID != 0 && recipes[i].OwnerID == viewerID
-    }
+	// relative to whoever is logged in (not the recipes_of user), so a share link never shows edit controls
+	viewerID := lib.GetUserID(r, store)
+	for i := range recipes {
+		recipes[i].IsMine = viewerID != 0 && recipes[i].OwnerID == viewerID
+	}
 
-    w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(recipes)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(recipes)
 }
 
 func handlePostRecipe(w http.ResponseWriter, r *http.Request) {
@@ -72,9 +72,9 @@ func handlePostRecipe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if rawRecipe.Name == "" {
-    http.Error(w, "Recipe name is required", http.StatusBadRequest)
-    return
-}
+		http.Error(w, "Recipe name is required", http.StatusBadRequest)
+		return
+	}
 
 	// check to ensure that for each submission type the required fields are there
 	switch rawRecipe.Type {
@@ -101,7 +101,7 @@ func handlePostRecipe(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid recipe type", http.StatusBadRequest)
 		return
 	}
-	
+
 	userID := lib.GetUserID(r, store)
 	if userID == 0 {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -109,9 +109,8 @@ func handlePostRecipe(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("Incoming /recipes request - Name: %s, User: %d, Type: %s, ContentLength: %d\n", rawRecipe.Name, userID, rawRecipe.Type, r.ContentLength)
 
-
 	if rawRecipe.Type == "manual" {
-		ctx := r.Context()	
+		ctx := r.Context()
 		err := lib.HandleManualRecipePost(ctx, userID, rawRecipe)
 
 		if err != nil {
@@ -119,16 +118,15 @@ func handlePostRecipe(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(map[string]string{
-    	    		"message": "Recipe created",
-    		})
+			"message": "Recipe created",
+		})
 	} else if rawRecipe.Type == "text" {
 		err := lib.QueueRecipeJob(r.Context(), models.RecipeJob{
-			Name: rawRecipe.Name,
-			Text: rawRecipe.Text,
-			Type: "text",
+			Name:    rawRecipe.Name,
+			Text:    rawRecipe.Text,
+			Type:    "text",
 			User_id: userID,
 		})
 		if err != nil {
@@ -137,23 +135,23 @@ func handlePostRecipe(w http.ResponseWriter, r *http.Request) {
 		}
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(map[string]string{
-    	    		"message": "Recipe queued to be parsed",
-    		})
+			"message": "Recipe queued to be parsed",
+		})
 	} else if rawRecipe.Type == "image" {
 		err := lib.QueueRecipeJob(r.Context(), models.RecipeJob{
-    	    	Name:    rawRecipe.Name,
-        		Images:   rawRecipe.Images,
-        		Type:    "image",
-        		User_id: userID,
-    		})
+			Name:    rawRecipe.Name,
+			Images:  rawRecipe.Images,
+			Type:    "image",
+			User_id: userID,
+		})
 		if err != nil {
 			http.Error(w, "Failed to queue recipe", http.StatusInternalServerError)
 			return
 		}
-    		w.WriteHeader(http.StatusCreated)
-    		json.NewEncoder(w).Encode(map[string]string{
-        		"message": "Recipe image queued to be parsed",
-    		})
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(map[string]string{
+			"message": "Recipe image queued to be parsed",
+		})
 
 	}
 }
@@ -184,21 +182,21 @@ func handlePatchRecipe(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	
+
 	w.WriteHeader(http.StatusOK)
-    w.Write([]byte(`{"status":"ok"}`))
+	w.Write([]byte(`{"status":"ok"}`))
 }
 
 func handleDeleteRecipe(w http.ResponseWriter, r *http.Request) {
 	var req DeleteRecipeRequest
 
-    err := json.NewDecoder(r.Body).Decode(&req)
-    if err != nil {
-        http.Error(w, "Invalid request body", http.StatusBadRequest)
-        return
-    }
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
 
-    recipeID := req.RecipeID
+	recipeID := req.RecipeID
 
 	ctx := r.Context()
 	userID := lib.GetUserID(r, store)
@@ -208,7 +206,7 @@ func handleDeleteRecipe(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	
+
 	w.WriteHeader(http.StatusOK)
-    w.Write([]byte(`{"status":"ok"}`))
+	w.Write([]byte(`{"status":"ok"}`))
 }

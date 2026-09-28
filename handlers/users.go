@@ -1,18 +1,18 @@
 package handlers
 
 import (
-    "encoding/json"
-    "net/http"
+	"encoding/json"
+	"net/http"
 
-	"go-guacamole/lib"
 	"go-guacamole/db"
+	"go-guacamole/lib"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 type FollowUserRequest struct {
-    FriendCode     string `json:"friend_code"`
+	FriendCode string `json:"friend_code"`
 }
 
 func FollowNewUser(w http.ResponseWriter, r *http.Request) {

@@ -1,13 +1,13 @@
 package lib
 
 import (
-	"net/http"
-	"github.com/gorilla/sessions"
 	"context"
+	"github.com/gorilla/sessions"
 	"go-guacamole/db"
+	"net/http"
 )
 
-func GetUserID(r *http.Request, store *sessions.CookieStore) (int) {
+func GetUserID(r *http.Request, store *sessions.CookieStore) int {
 	session, err := store.Get(r, "session")
 	if err != nil {
 		return 0
@@ -30,16 +30,16 @@ func GetUserID(r *http.Request, store *sessions.CookieStore) (int) {
 	}
 }
 
-func GetUserIdByUuid(ctx context.Context, uuid string) (int) {
-    var id int
-    err := db.Pool.QueryRow(ctx,
-        `SELECT id FROM users WHERE uuid = $1`,
-        uuid,
-    ).Scan(&id)
+func GetUserIdByUuid(ctx context.Context, uuid string) int {
+	var id int
+	err := db.Pool.QueryRow(ctx,
+		`SELECT id FROM users WHERE uuid = $1`,
+		uuid,
+	).Scan(&id)
 
 	if err != nil {
-        return 0
-    }
+		return 0
+	}
 
 	return id
 }

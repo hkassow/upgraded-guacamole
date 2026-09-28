@@ -1,20 +1,20 @@
 package lib
 
 import (
-        "context"
-        "go-guacamole/db"
+	"context"
+	"go-guacamole/db"
 )
 
 type IngredientWithTag struct {
-    ID       int64   `json:"id"`
-    Name     string  `json:"name"`
-    Season   *string `json:"season,omitempty"`
-    Category *string `json:"category,omitempty"`
-    Location *string `json:"location,omitempty"`
+	ID       int64   `json:"id"`
+	Name     string  `json:"name"`
+	Season   *string `json:"season,omitempty"`
+	Category *string `json:"category,omitempty"`
+	Location *string `json:"location,omitempty"`
 }
 
 func GetAllIngredients(ctx context.Context) ([]IngredientWithTag, error) {
-    query := `
+	query := `
         SELECT
             i.id,
             i.name,
@@ -26,30 +26,30 @@ func GetAllIngredients(ctx context.Context) ([]IngredientWithTag, error) {
         ORDER BY i.name
     `
 
-    rows, err := db.Pool.Query(ctx, query)
-    if err != nil {
-        return nil, err
-    }
-    defer rows.Close()
+	rows, err := db.Pool.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
 
-    ingredients := []IngredientWithTag{}
+	ingredients := []IngredientWithTag{}
 
-    for rows.Next() {
-        var ing IngredientWithTag
+	for rows.Next() {
+		var ing IngredientWithTag
 
-        err := rows.Scan(
-            &ing.ID,
-            &ing.Name,
-            &ing.Season,
-            &ing.Category,
-            &ing.Location,
-        )
-        if err != nil {
-            return nil, err
-        }
+		err := rows.Scan(
+			&ing.ID,
+			&ing.Name,
+			&ing.Season,
+			&ing.Category,
+			&ing.Location,
+		)
+		if err != nil {
+			return nil, err
+		}
 
-        ingredients = append(ingredients, ing)
-    }
+		ingredients = append(ingredients, ing)
+	}
 
-    return ingredients, nil
+	return ingredients, nil
 }

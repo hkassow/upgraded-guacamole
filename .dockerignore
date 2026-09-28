@@ -1,0 +1,9 @@
+# keep secrets and local clutter out of image builds (Dockerfile.prod copies the whole folder)
+.git
+secrets
+certs
+backups
+tmp
+*.log
+PROD-README.md
+abc.txt

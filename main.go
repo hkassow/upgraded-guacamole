@@ -1,12 +1,12 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
-	"context"
 
-	"go-guacamole/handlers"
 	"go-guacamole/db"
+	"go-guacamole/handlers"
 	"go-guacamole/lib"
 )
 
@@ -15,7 +15,7 @@ func main() {
 	http.HandleFunc("/hello/", handlers.HelloHandler)
 	http.HandleFunc("/cooking/", handlers.CookingHandler)
 
-	http.HandleFunc("/recipes", handlers.RecipesHandler) 
+	http.HandleFunc("/recipes", handlers.RecipesHandler)
 	http.HandleFunc("/ingredients", handlers.IngredientsHandler)
 
 	http.HandleFunc("/auth/google/login", handlers.GoogleLogin)
@@ -27,12 +27,12 @@ func main() {
 
 	// ~~~ frontend ~~~
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-        http.ServeFile(w, r, "index.html")
-    })
+		http.ServeFile(w, r, "index.html")
+	})
 
-    // ~~~ static assets ~~~
+	// ~~~ static assets ~~~
 	fs := http.FileServer(http.Dir("static"))
-    http.Handle("/static/", http.StripPrefix("/static/", fs))
+	http.Handle("/static/", http.StripPrefix("/static/", fs))
 
 	// ~~~ db ~~~
 	db.Connect()
@@ -44,7 +44,7 @@ func main() {
 	log.Println("Starting Recipe Worker")
 	lib.StartRecipeWorker()
 	if err := lib.LoadUnparsedRecipeJobs(context.Background()); err != nil {
-    	log.Println("Failed loading unparsed jobs:", err)
+		log.Println("Failed loading unparsed jobs:", err)
 	}
 
 	// ~~~ start init ~~~

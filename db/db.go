@@ -46,4 +46,3 @@ func Close() {
 		log.Println("Database connection closed")
 	}
 }
-

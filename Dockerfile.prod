@@ -3,15 +3,14 @@ FROM golang:1.25-alpine AS builder
 
 WORKDIR /app
 
-# Copy go mod files
+# Copy go mod files first so the module download is cached between builds
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy source code
+# Copy source code (migrations are embedded into the binary)
 COPY . .
 
-# Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main .
+RUN CGO_ENABLED=0 GOOS=linux go build -o main .
 
 # Final stage
 FROM alpine:latest
@@ -20,15 +19,12 @@ RUN apk --no-cache add ca-certificates
 
 WORKDIR /root/
 
-# Copy the binary from builder
 COPY --from=builder /app/main .
 
-RUN mkdir certs static
-
+# served from disk at runtime by main.go
+COPY index.html .
 COPY static static
 
-# Expose port (adjust as needed)
 EXPOSE 8443
 
-# Run the binary
 CMD ["./main"]
