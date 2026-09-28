@@ -1070,18 +1070,29 @@ function createRecipeModal(card, recipe) {
 
     // Populatae edit ingredients
     const editIngredientsList = modal.querySelector('.editIngredientsList');
+    // header and rows share a grid so the column names line up with the inputs
+    const rowClass = showSectionHeadings ? 'edit-ingredient-row with-section' : 'edit-ingredient-row';
+    if (recipe.ingredients.length) {
+        const header = document.createElement('div');
+        header.className = `${rowClass} edit-ingredient-header`;
+        header.setAttribute('aria-hidden', 'true'); // each input has its own aria-label
+        const columns = ['Ingredient', 'Amount', 'Prep notes'];
+        if (showSectionHeadings) columns.push('Section');
+        columns.forEach(label => {
+            const cell = document.createElement('span');
+            cell.textContent = label;
+            header.appendChild(cell);
+        });
+        editIngredientsList.appendChild(header);
+    }
+
     recipe.ingredients.forEach((ing, idx) => {
     	const row = document.createElement('div');
-        row.style.cssText = `
-            display:flex;
-            align-items:center;
-            gap:10px;
-            padding:6px 0;
-        `;
+        row.className = rowClass;
 	    row.innerHTML = `
-            <input type="text" class="nameInput" data-index="${idx}" placeholder="Name">
-            <input type="text" class="amountInput" data-index="${idx}" placeholder="Amount">
-            <input type="text" class="prepInput" data-index="${idx}" placeholder="Prep Notes">
+            <input type="text" class="nameInput" data-index="${idx}" placeholder="Name" aria-label="Ingredient ${idx + 1} name">
+            <input type="text" class="amountInput" data-index="${idx}" placeholder="Amount" aria-label="Ingredient ${idx + 1} amount">
+            <input type="text" class="prepInput" data-index="${idx}" placeholder="Prep Notes" aria-label="Ingredient ${idx + 1} prep notes">
 	    `;
         // set as values, not HTML attributes, so quotes etc. in a name can't break out of the input
         row.querySelector('.nameInput').value = ing.name || '';
@@ -1093,6 +1104,7 @@ function createRecipeModal(card, recipe) {
             select.className = 'componentInput';
             select.dataset.index = idx;
             select.title = 'Recipe section';
+            select.setAttribute('aria-label', `Ingredient ${idx + 1} section`);
             components.forEach(component => {
                 const option = document.createElement('option');
                 option.value = component;

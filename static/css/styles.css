@@ -465,6 +465,32 @@ textarea {
     margin: 12px 0 0;
 }
 
+/* edit form ingredient rows; the header row uses the same grid so labels sit over their inputs */
+/* the name column gets the most room: it's the one that gets cut off on phones */
+.edit-ingredient-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+}
+
+.edit-ingredient-row.with-section {
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.9fr);
+}
+
+.edit-ingredient-row select {
+    width: 100%;
+    min-width: 0;
+}
+
+.edit-ingredient-header {
+    padding-bottom: 0;
+    font-size: 13px;
+    font-weight: bold;
+    opacity: 0.75;
+}
+
 /* ingredients listed under each instruction step */
 .step-ingredients {
     list-style: none;
