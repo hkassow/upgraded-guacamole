@@ -915,9 +915,15 @@ function capitalizeComponent(component) {
     return name.charAt(0).toUpperCase() + name.slice(1);
 }
 
+// "227 g", "about 8 oz" -> true; "2 cups" -> false
+function isMetricWeight(amount) {
+    const parsed = IngredientConversions.parseAmount(amount);
+    return !!parsed && parsed.family === 'weight' && parsed.metric;
+}
+
 // "½ cup" + "granulated sugar" -> "½ cup granulated sugar", "remaining" -> "remaining granulated sugar"
 function formatStepIngredient(ing) {
-    return [ing.amount, ing.name].map(s => (s || '').trim()).filter(Boolean).join(' ');
+    return [IngredientConversions.ouncesToGrams(ing.amount), ing.name].map(s => (s || '').trim()).filter(Boolean).join(' ');
 }
 
 // one instruction step, with the ingredients it uses listed underneath (from step_ingredients,
@@ -1112,9 +1118,16 @@ function createRecipeModal(card, recipe) {
         const ul = document.createElement('ul');
         sectionIngredients.forEach(ing => {
             const li = document.createElement('li');
+            // ounces are shown as grams
+            const amount = IngredientConversions.ouncesToGrams(ing.amount);
             // the recipe's own alternative amount wins; otherwise estimate grams/cups/ml for common ingredients
-            const altAmount = ing.alt_amount || IngredientConversions.alternativeAmount(ing.name, ing.amount);
-            li.textContent = `${ing.amount} ${altAmount ? '(' + altAmount + ') ' : ''}${ing.name} ${ing.preparation_notes || ''}`.trim();
+            let altAmount = ing.alt_amount
+                ? IngredientConversions.ouncesToGrams(ing.alt_amount)
+                : IngredientConversions.alternativeAmount(ing.name, ing.amount);
+            // "8 oz (227 g)" would otherwise show grams twice
+            if (isMetricWeight(amount) && isMetricWeight(altAmount)) altAmount = null;
+            const notes = IngredientConversions.ouncesToGrams(ing.preparation_notes || '');
+            li.textContent = `${amount} ${altAmount ? '(' + altAmount + ') ' : ''}${ing.name} ${notes}`.trim();
             ul.appendChild(li);
         });
         ingredientsList.appendChild(ul);
@@ -1186,7 +1199,7 @@ function createRecipeModal(card, recipe) {
         const mainOl = document.createElement('ol');
         recipe.steps.main.forEach((step, index) => {
             // edit box shows the same converted text so it matches what's displayed
-            const displayStep = addTemperatureConversions(step);
+            const displayStep = IngredientConversions.ouncesToGrams(addTemperatureConversions(step));
             mainOl.appendChild(createStepItem(recipe, 'main', index, displayStep));
 	        if (fullInstructions) {
 	    	    fullInstructions += '\n\n';
@@ -1220,7 +1233,7 @@ function createRecipeModal(card, recipe) {
 
         const ol = document.createElement('ol');
         steps.forEach((step, index) => {
-            const displayStep = addTemperatureConversions(step);
+            const displayStep = IngredientConversions.ouncesToGrams(addTemperatureConversions(step));
             ol.appendChild(createStepItem(recipe, component, index, displayStep));
             if (fullInstructions) {
                 fullInstructions += '\n\n';

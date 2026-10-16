@@ -11,6 +11,7 @@
 
 const IngredientConversions = (() => {
     const ML_PER_CUP = 236.588;
+    const GRAMS_PER_OUNCE = 28.3495;
 
     // Grams per US cup.
     //
@@ -254,7 +255,7 @@ const IngredientConversions = (() => {
         [/^(quarts?|qt)(?![a-z])/, 'volume', 946.353, false],
         [/^(kilograms?|kilos?|kg)(?![a-z])/, 'weight', 1000, true],
         [/^(grams?|gr?)(?![a-z])/, 'weight', 1, true],
-        [/^(ounces?|oz\.?)(?![a-z])/, 'weight', 28.3495, false],
+        [/^(ounces?|oz\.?)(?![a-z])/, 'weight', GRAMS_PER_OUNCE, false],
         [/^(pounds?|lbs?\.?)(?![a-z])/, 'weight', 453.592, false],
     ];
 
@@ -370,10 +371,15 @@ const IngredientConversions = (() => {
         return String(Number(value.toFixed(decimals)));
     }
 
+    // to the nearest 5 g (1 g below 10 g)
+    function roundGrams(grams) {
+        const step = grams < 10 ? 1 : 5;
+        return Math.max(step, Math.round(grams / step) * step);
+    }
+
     function formatGrams(grams) {
         if (grams >= 1000) return `${trimNumber(grams / 1000, 2)} kg`;
-        const step = grams < 10 ? 1 : 5;
-        return `${Math.max(step, Math.round(grams / step) * step)} g`;
+        return `${roundGrams(grams)} g`;
     }
 
     function formatMl(ml) {
@@ -423,6 +429,27 @@ const IngredientConversions = (() => {
         return parsed.metric ? `≈ ${formatCups(ml)}` : `≈ ${formatMl(ml)}`;
     }
 
+    // a number as parseNumber reads it ("1 1/2", "1/2", "1½", "½", "7.5", "7,5"), not part of a
+    // bigger number
+    const NUMBER_PATTERN = `(?<![\\d.,/])(?:\\d+\\s+\\d+\\s*/\\s*\\d+|\\d+\\s*/\\s*\\d+|\\d*[${FRACTION_CHARS}]|\\d+\\s+[${FRACTION_CHARS}]|\\d+[.,]\\d{1,2}(?!\\d)|\\d+(?:\\.\\d+)?|\\.\\d+)`;
+    // "8 oz", "8oz.", "1½ ounces", "14-ounce", "6-8 oz", "6 to 8 ounces". Fluid ounces never match
+    // since "fl" sits between the number and "oz".
+    const OUNCES = new RegExp(`(${NUMBER_PATTERN})(?:\\s*(?:-|–|—|to)\\s*(${NUMBER_PATTERN}))?\\s*-?\\s*(?:ounces?|oz)(?![a-z])\\.?`, 'gi');
+
+    // Rewrites every weight in ounces in a piece of text as grams: "8 oz" -> "225 g",
+    // "1 (14 oz) can" -> "1 (395 g) can", "6-8 oz" -> "170-225 g". Everything else is left as is.
+    function ouncesToGrams(text) {
+        if (!text) return text;
+        return String(text).replace(OUNCES, (match, from, to) => {
+            const low = parseNumber(from.trim());
+            const high = to && parseNumber(to.trim());
+            if (!low || (to && !high)) return match;
+            if (!to) return formatGrams(low.value * GRAMS_PER_OUNCE);
+            // ranges stay in grams so both ends share a unit
+            return `${roundGrams(low.value * GRAMS_PER_OUNCE)}-${roundGrams(high.value * GRAMS_PER_OUNCE)} g`;
+        });
+    }
+
     // Combines a grocery list total ({ volume: ml, weight: g, count: n }) into the unit you'd shop
     // with: grams for dry goods, ml for liquids. Returns the new totals and whether anything was
     // converted, or null for ingredients not in the table.
@@ -445,7 +472,7 @@ const IngredientConversions = (() => {
     }
 
     return {
-        lookup, parseAmount, parseCount, alternativeAmount, combineTotals, formatGrams, formatMl, formatCups, normalizeName,
+        lookup, parseAmount, parseCount, alternativeAmount, ouncesToGrams, combineTotals, formatGrams, formatMl, formatCups, normalizeName,
         table: INGREDIENT_DENSITIES, // exposed for tests
     };
 })();

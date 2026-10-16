@@ -54,7 +54,7 @@ function buildShoppingList(ingredients) {
 
 		const parsed = parseShoppingAmount(ing.amount);
 		if (!parsed) {
-			if (ing.amount) group.leftover.push(ing.amount);
+			if (ing.amount) group.leftover.push(IngredientConversions.ouncesToGrams(ing.amount));
 			continue;
 		}
 
@@ -131,8 +131,8 @@ function buildIngredientCollection(recipeIds, recipesById, ingredientsById) {
 
 			// Unmerged, per-recipe line - mirrors the original ing_string format.
 			let line = ` - ${fullIngredient.name}`;
-			if (ri.amount) line += `, ${ri.amount}`;
-			if (ri.preparation_notes) line += `, ${ri.preparation_notes}`;
+			if (ri.amount) line += `, ${IngredientConversions.ouncesToGrams(ri.amount)}`;
+			if (ri.preparation_notes) line += `, ${IngredientConversions.ouncesToGrams(ri.preparation_notes)}`;
 			recipeLines.push(line);
 		});
 
@@ -183,7 +183,7 @@ function buildOriginalAmounts(flat) {
 	flat.forEach(({ name, amount }) => {
 		const key = name.trim().toLowerCase();
 		if (!groups.has(key)) groups.set(key, { name: name.trim(), amounts: [] });
-		if (amount.trim()) groups.get(key).amounts.push(amount.trim());
+		if (amount.trim()) groups.get(key).amounts.push(IngredientConversions.ouncesToGrams(amount.trim()));
 	});
 
 	return [...groups.values()]

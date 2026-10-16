@@ -99,3 +99,7 @@ test('formats volumes without trailing zeros', () => {
     assert.deepEqual([...linesFor(list, 'nori flakes')], ['3 tbsp']);
     assert.deepEqual([...linesFor(list, 'hazelnuts')], ['6']);
 });
+
+test('shows ounces as grams in amounts it cannot add up', () => {
+    assert.deepEqual([...linesFor(buildShoppingList([{ name: 'tomatoes', amount: '1 (14 oz) can' }]), 'tomatoes')], ['1 (395 g) can']);
+});

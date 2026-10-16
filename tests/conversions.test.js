@@ -151,3 +151,20 @@ test('combines grocery totals into grams or ml', () => {
 
     assert.equal(conversions.combineTotals('eggs', { count: 3 }), null);
 });
+
+test('rewrites ounces as grams', () => {
+    assert.equal(conversions.ouncesToGrams('8 oz'), '225 g');
+    assert.equal(conversions.ouncesToGrams('1½ ounces'), '45 g');
+    assert.equal(conversions.ouncesToGrams('1 1/2 oz.'), '45 g');
+    assert.equal(conversions.ouncesToGrams('1 (14-ounce) can'), '1 (395 g) can');
+    assert.equal(conversions.ouncesToGrams('6 to 8 oz'), '170-225 g');
+    assert.equal(conversions.ouncesToGrams('40 oz'), '1.13 kg');
+    assert.equal(conversions.ouncesToGrams('Fold in 4 oz cheese.'), 'Fold in 115 g cheese.');
+});
+
+test('leaves fluid ounces and other units alone', () => {
+    for (const text of ['8 fl oz', '8 fluid ounces', '2 cups', '1 can', '', 'a dozen']) {
+        assert.equal(conversions.ouncesToGrams(text), text);
+    }
+    assert.equal(conversions.ouncesToGrams(undefined), undefined);
+});
